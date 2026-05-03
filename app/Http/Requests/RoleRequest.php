@@ -4,7 +4,7 @@ namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
 
-class VerifyOtpRequest extends FormRequest
+class RoleRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -14,15 +14,15 @@ class VerifyOtpRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'otp' => 'required|string|size:5',
+            'role' => 'required|in:volunteer,Donor,Beneficiary'
         ];
     }
 
     public function messages(): array
     {
         return [
-            'otp.required' => 'OTP is required',
-            'otp.size' => 'OTP must be exactly 5 characters',
+            'role.required' => 'The role field is required',
+            'role.in' => 'The role must be one of the following: volunteer, Donor, Beneficiary'
         ];
     }
 }

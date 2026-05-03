@@ -8,6 +8,7 @@ use App\Services\OtpService;
 use App\Http\Requests\RegisterRequest;
 use App\Http\Requests\LoginRequest;
 use App\Http\Requests\VerifyOtpRequest;
+use App\Http\Requests\RoleRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
@@ -25,108 +26,210 @@ class UserController extends Controller
         $this->rateLimiter = $rateLimiter;
     }
 
-    public function register(RegisterRequest $request)
-    {
-        // Rate limiting: max 3 registration attempts per hour per IP
-        $key = 'register.' . $request->ip();
-        
-        if ($this->rateLimiter->tooManyAttempts($key, 3)) {
-            $seconds = $this->rateLimiter->availableIn($key);
-            return response()->json([
-                'code' => 429,
-                'status' => 'error',
-                'message' => 'Too many registration attempts. Please try again in ' . ceil($seconds / 60) . ' minutes.',
-                'retry_after' => $seconds
-            ], 429);
-        }
-        
-        $this->rateLimiter->hit($key, 3600); // 1 hour lockout
-        
-        $data = $request->validated();
-
-        $user = User::create([
-            'name' => $data['name'],
-            'phone' => $data['phone'],
-            'email' => $data['email'],
-            'password' => Hash::make($data['password']),
-            'role' => $data['role'],
-            'profile_completed' => false,
-        ]);
-
-        $this->otpService->sendOtp($user->email, 'verification');
-
-        $token = $user->createToken('profile_token')->plainTextToken;
-
+   public function register(RegisterRequest $request)
+{
+    $key = 'register.' . $request->ip();
+    
+    if ($this->rateLimiter->tooManyAttempts($key, 3)) {
+        $seconds = $this->rateLimiter->availableIn($key);
         return response()->json([
-            'code' => 201,
-            'status' => 'success',
-            'message' => 'Account created. Please verify your email and complete profile.',
-            'token' => $token,
-            'user' => $user
-        ], 201);
+            'code' => 429,
+            'status' => 'error',
+            'message' => 'Too many registration attempts. Please try again in ' . ceil($seconds / 60) . ' minutes.',
+            'retry_after' => $seconds
+        ], 429);
     }
     
-    public function verifyOtp(VerifyOtpRequest $request)
-    {
-        // Rate limiting: max 5 verification attempts per 15 minutes
-        $key = 'verify_otp.' . $request->input('identifier') . '.' . $request->ip();
-        
-        if ($this->rateLimiter->tooManyAttempts($key, 5)) {
-            $seconds = $this->rateLimiter->availableIn($key);
-            return response()->json([
-                'code' => 429,
-                'status' => 'error',
-                'message' => 'Too many verification attempts. Please try again after ' . ceil($seconds / 60) . ' minutes.',
-                'retry_after' => $seconds
-            ], 429);
-        }
-        
+    $this->rateLimiter->hit($key, 3600);
+    
+    // ✅ قراءة البيانات من الرابط (Query Parameters) أو من Body
+    if ($request->query('name') || $request->query('email') || $request->query('password')) {
+        $data = $request->query();
+    } else {
         $data = $request->validated();
+    }
+    
+    // ✅ التحقق من وجود الاسم وعدم كونه فارغاً
+    if (!isset($data['name']) || empty(trim($data['name']))) {
+        return response()->json([
+            'code' => 422,
+            'status' => 'error',
+            'message' => 'Validation failed',
+            'errors' => [
+                'name' => ['The name field is required and cannot be empty']
+            ]
+        ], 422);
+    }
+    
+    // ✅ التأكد من وجود باقي الحقول
+    if (!isset($data['email']) || empty($data['email'])) {
+        return response()->json([
+            'code' => 422,
+            'status' => 'error',
+            'message' => 'Validation failed',
+            'errors' => [
+                'email' => ['The email field is required']
+            ]
+        ], 422);
+    }
+    
+    if (!isset($data['password']) || empty($data['password'])) {
+        return response()->json([
+            'code' => 422,
+            'status' => 'error',
+            'message' => 'Validation failed',
+            'errors' => [
+                'password' => ['The password field is required']
+            ]
+        ], 422);
+    }
+    
+    // ✅ التحقق من تطابق كلمة المرور
+    if (!isset($data['password_confirmation']) || $data['password'] !== $data['password_confirmation']) {
+        return response()->json([
+            'code' => 422,
+            'status' => 'error',
+            'message' => 'Validation failed',
+            'errors' => [
+                'password_confirmation' => ['The password confirmation does not match']
+            ]
+        ], 422);
+    }
+    
+    // ✅ التحقق من أن البريد الإلكتروني فريد
+    $existingUser = User::where('email', $data['email'])->first();
+    if ($existingUser) {
+        return response()->json([
+            'code' => 422,
+            'status' => 'error',
+            'message' => 'Validation failed',
+            'errors' => [
+                'email' => ['This email is already registered']
+            ]
+        ], 422);
+    }
 
-        $valid = $this->otpService->verifyOtp(
-            $data['identifier'],
-            $data['otp'],
-            'verification'
-        );
+    $user = User::create([
+        'name' => trim($data['name']),
+        'email' => $data['email'],
+        'password' => Hash::make($data['password']),
+        'role' => null,
+        'profile_completed' => false,
+    ]);
 
-        if (!$valid) {
-            $this->rateLimiter->hit($key, 900); // 15 minutes
-            
-            return response()->json([
-                'code' => 422,
-                'status' => 'error',
-                'message' => 'Validation failed',
-                'errors' => ['otp' => ['Invalid or expired OTP']]
-            ], 422);
-        }
+    $this->otpService->sendOtp($user->email, 'verification');
 
-        $user = User::where('email', $data['identifier'])->first();
+    $token = $user->createToken('profile_token')->plainTextToken;
 
+    return response()->json([
+        'code' => 201,
+        'status' => 'success',
+        'message' => 'Account created. Please verify your email and complete profile.',
+        'token' => $token,
+        'user' => $user
+    ], 201);
+}
+    // Select role after registration
+    public function selectRole(RoleRequest $request)
+    {
+        $user = $request->user();
+        
         if (!$user) {
             return response()->json([
-                'code' => 404,
+                'code' => 401,
                 'status' => 'error',
-                'message' => 'User not found'
-            ], 404);
-        }
-
-        if (!$user->hasVerifiedEmail()) {
-            $user->markEmailAsVerified();
+                'message' => 'Unauthenticated'
+            ], 401);
         }
         
-      
-        $this->rateLimiter->clear($key);
-
+        if (!$user->hasVerifiedEmail()) {
+            return response()->json([
+                'code' => 403,
+                'status' => 'error',
+                'message' => 'Please verify your email first using OTP.'
+            ], 403);
+        }
+        
+        if ($user->role !== null) {
+            return response()->json([
+                'code' => 400,
+                'status' => 'error',
+                'message' => 'You have already selected a role'
+            ], 400);
+        }
+        
+        $user->role = $request->role;
+        $user->save();
+        
         return response()->json([
             'code' => 200,
             'status' => 'success',
-            'message' => 'Email verified successfully'
+            'message' => 'Role selected successfully. Please complete your profile.',
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $user->role,
+                'profile_completed' => $user->profile_completed
+            ]
         ], 200);
     }
+    
+   public function verifyOtp(VerifyOtpRequest $request)
+{
+    // الحصول على المستخدم من التوكن الحالي
+    $user = $request->user();
+    
+    if (!$user) {
+        return response()->json([
+            'code' => 401,
+            'status' => 'error',
+            'message' => 'Unauthenticated'
+        ], 401);
+    }
+    
+    $key = 'verify_otp.' . $user->email . '.' . $request->ip();
+    
+    if ($this->rateLimiter->tooManyAttempts($key, 5)) {
+        $seconds = $this->rateLimiter->availableIn($key);
+        return response()->json([
+            'code' => 429,
+            'status' => 'error',
+            'message' => 'Too many verification attempts. Please try again after ' . ceil($seconds / 60) . ' minutes.',
+            'retry_after' => $seconds
+        ], 429);
+    }
+    
+    $valid = $this->otpService->verifyOtp(
+        $user->email,
+        $request->otp,
+        'verification'
+    );
 
+    if (!$valid) {
+        $this->rateLimiter->hit($key, 900);
+        
+        return response()->json([
+            'code' => 422,
+            'status' => 'error',
+            'message' => 'Invalid or expired OTP'
+        ], 422);
+    }
+
+    if (!$user->hasVerifiedEmail()) {
+        $user->markEmailAsVerified();
+    }
+    
+    $this->rateLimiter->clear($key);
+
+    return response()->json([
+        'code' => 200,
+        'status' => 'success',
+        'message' => 'Email verified successfully'
+    ], 200);
+}
     public function login(LoginRequest $request)
     {
-        // Rate limiting: max 5 login attempts per 15 minutes
         $key = 'login.' . $request->input('email') . '.' . $request->ip();
         
         if ($this->rateLimiter->tooManyAttempts($key, 5)) {
@@ -144,7 +247,7 @@ class UserController extends Controller
         $user = User::where('email', $data['email'])->first();
 
         if (!$user || !Hash::check($data['password'], $user->password)) {
-            $this->rateLimiter->hit($key, 900); // 15 minutes
+            $this->rateLimiter->hit($key, 900);
             
             return response()->json([
                 'code' => 401,
@@ -160,6 +263,14 @@ class UserController extends Controller
                 'message' => 'Please verify your email first. Check your inbox for the OTP code.'
             ], 403);
         }
+        
+        if ($user->role === null) {
+            return response()->json([
+                'code' => 403,
+                'status' => 'error',
+                'message' => 'Please select your role first'
+            ], 403);
+        }
 
         if (!$user->profile_completed) {
             return response()->json([
@@ -169,7 +280,6 @@ class UserController extends Controller
             ], 403);
         }
 
-      
         $this->rateLimiter->clear($key);
         
         $user->tokens()->delete();
@@ -193,7 +303,6 @@ class UserController extends Controller
             'id' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
-            'phone' => $user->phone,
             'role' => $user->role,
             'is_active' => $user->is_active,
             'profile_completed' => $user->profile_completed,
@@ -208,9 +317,9 @@ class UserController extends Controller
                         'type' => 'donor',
                         'skills' => $user->donor->skills,
                         'availability' => $user->donor->availability,
+                        'region' => $user->donor->region,
                         'total_hours' => $user->donor->total_hours,
                         'status' => $user->donor->status,
-                        'region' => $user->donor->region,
                         'total_donated' => $user->donor->total_donated,
                         'created_at' => $user->donor->created_at,
                         'updated_at' => $user->donor->updated_at,
@@ -288,7 +397,6 @@ class UserController extends Controller
 
     public function changePassword(ChangePasswordRequest $request)
     {
-        // Rate limiting: max 3 password change attempts per hour
         $key = 'change_password.' . $request->user()->id . '.' . $request->ip();
         
         if ($this->rateLimiter->tooManyAttempts($key, 3)) {
@@ -314,7 +422,7 @@ class UserController extends Controller
         $data = $request->validated();
         
         if (!Hash::check($data['current_password'], $user->password)) {
-            $this->rateLimiter->hit($key, 3600); // 1 hour
+            $this->rateLimiter->hit($key, 3600);
             
             return response()->json([
                 'code' => 422,
@@ -327,10 +435,8 @@ class UserController extends Controller
         $user->password = Hash::make($data['new_password']);
         $user->save();
         
-      
         $this->rateLimiter->clear($key);
         
-       
         $user->tokens()->where('id', '!=', $user->currentAccessToken()->id)->delete();
         
         return response()->json([
@@ -342,7 +448,6 @@ class UserController extends Controller
 
     public function forgotPassword(Request $request)
     {
-        // Rate limiting: max 3 forgot password requests per hour
         $key = 'forgot_password.' . $request->ip() . '.' . $request->input('email');
         
         if ($this->rateLimiter->tooManyAttempts($key, 3)) {
@@ -355,9 +460,7 @@ class UserController extends Controller
             ], 429);
         }
         
-        $request->validate([
-            'email' => 'required|email|exists:users,email'
-        ]);
+      
         
         $user = User::where('email', $request->email)->first();
         
@@ -369,7 +472,7 @@ class UserController extends Controller
             ], 404);
         }
         
-        $this->rateLimiter->hit($key, 3600); // 1 hour
+        $this->rateLimiter->hit($key, 3600);
         $this->otpService->sendOtp($user->email, 'reset_password');
         
         return response()->json([
@@ -381,7 +484,6 @@ class UserController extends Controller
     
     public function resetPassword(Request $request)
     {
-        // Rate limiting: max 3 reset password attempts per hour
         $key = 'reset_password.' . $request->ip() . '.' . $request->input('email');
         
         if ($this->rateLimiter->tooManyAttempts($key, 3)) {
@@ -395,7 +497,7 @@ class UserController extends Controller
         }
         
         $request->validate([
-            'email' => 'required|email|exists:users,email',
+          //  'email' => 'required|email|exists:users,email',
             'otp' => 'required|string|size:5',
             'new_password' => 'required|string|min:8|confirmed'
         ]);
@@ -407,7 +509,7 @@ class UserController extends Controller
         );
         
         if (!$valid) {
-            $this->rateLimiter->hit($key, 3600); // 1 hour
+            $this->rateLimiter->hit($key, 3600);
             
             return response()->json([
                 'code' => 422,
@@ -421,10 +523,8 @@ class UserController extends Controller
         $user->password = Hash::make($request->new_password);
         $user->save();
         
-        
         $this->rateLimiter->clear($key);
         
-       
         $user->tokens()->delete();
         
         return response()->json([
@@ -434,10 +534,8 @@ class UserController extends Controller
         ], 200);
     }
     
-    
     public function resendOtp(Request $request)
     {
-        // Rate limiting: max 2 resend attempts per hour
         $key = 'resend_otp.' . $request->input('email') . '.' . $request->ip();
         
         if ($this->rateLimiter->tooManyAttempts($key, 2)) {
@@ -464,7 +562,7 @@ class UserController extends Controller
             ], 400);
         }
         
-        $this->rateLimiter->hit($key, 3600); // 1 hour
+        $this->rateLimiter->hit($key, 3600);
         $this->otpService->sendOtp($user->email, 'verification');
         
         return response()->json([
@@ -473,4 +571,5 @@ class UserController extends Controller
             'message' => 'OTP resent successfully. Please check your email.'
         ], 200);
     }
+    
 }

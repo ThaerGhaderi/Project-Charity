@@ -21,7 +21,7 @@ return new class extends Migration
             $table->date('birth_date');
             $table->enum('gender', ['male', 'female']);
            $table->enum('marital_status',['single', 'married', 'divorced', 'widowed']);
-           $table->boolean('is_anonymized')->default(false);
+           $table->boolean('is_anonymized');
             $table->timestamps();
         });
     }

@@ -1,5 +1,4 @@
 <?php
-// app/Models/Otp.php
 
 namespace App\Models;
 
@@ -8,9 +7,9 @@ use Illuminate\Database\Eloquent\Model;
 class Otp extends Model
 {
     protected $fillable = [
-        'identifier',
+        'email',    // ✅ أضف هذا
         'otp',
-        'type',
+        'type',     // ✅ أضف هذا
         'expires_at',
         'is_used'
     ];

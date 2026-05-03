@@ -11,6 +11,7 @@ class VolunterProfile extends Model
         'skills',
         'availability',
         'total_hours',
+         'region',  
         'status'
     ];
 

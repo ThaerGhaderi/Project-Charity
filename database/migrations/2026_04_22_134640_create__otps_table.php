@@ -9,18 +9,22 @@ return new class extends Migration
     /**
      * Run the migrations.
      */
-   public function up(): void
+    public function up(): void
     {
+        Schema::dropIfExists('otps');
+        
         Schema::create('otps', function (Blueprint $table) {
             $table->id();
-            $table->string('identifier');
-            $table->string('otp');
-            $table->string('type')->default('verification');
-            $table->timestamp('expires_at');
-            $table->boolean('is_used')->default(false);
+            $table->string('email');  // بريد المستخدم الإلكتروني
+            $table->string('otp');     // رمز التحقق (5 أرقام)
+            $table->string('type')->default('verification'); // نوع الـ OTP: verification, reset_password
+            $table->timestamp('expires_at'); // تاريخ انتهاء الصلاحية
+            $table->boolean('is_used')->default(false); // هل تم استخدامه؟
             $table->timestamps();
-
-            $table->index(['identifier', 'otp', 'is_used']);
+            
+            // فهارس لتحسين أداء البحث
+            $table->index(['email', 'type', 'is_used']);
+            $table->index('expires_at');
         });
     }
 
@@ -29,6 +33,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('_otps');
+        Schema::dropIfExists('otps');
     }
 };

@@ -12,32 +12,33 @@ class OtpService
         return str_pad(random_int(0, 99999), 5, '0', STR_PAD_LEFT);
     }
 
-    public function sendOtp(string $identifier, string $type = 'verification'): Otp
+    public function sendOtp(string $email, string $type = 'verification'): Otp
     {
-        Otp::where('identifier', $identifier)
+        // حذف الـ OTP القديمة لنفس البريد الإلكتروني ونفس النوع
+        Otp::where('email', $email)
             ->where('type', $type)
             ->delete();
 
         $otpCode = $this->generateOtp();
 
         $otp = Otp::create([
-            'identifier' => $identifier,
+            'email' => $email,           // ✅ أضف هذا
             'otp' => $otpCode,
-            'type' => $type,
+            'type' => $type,             // ✅ أضف هذا
             'expires_at' => now()->addMinutes(10),
             'is_used' => false,
         ]);
 
-        Mail::raw("Your OTP code is: {$otpCode}", function ($message) use ($identifier) {
-            $message->to($identifier)->subject('OTP Code');
+        Mail::raw("Your OTP code is: {$otpCode}", function ($message) use ($email) {
+            $message->to($email)->subject('OTP Code');
         });
 
         return $otp;
     }
 
-    public function verifyOtp(string $identifier, string $otpCode, string $type = 'verification'): bool
+    public function verifyOtp(string $email, string $otpCode, string $type = 'verification'): bool
     {
-        $otp = Otp::where('identifier', $identifier)
+        $otp = Otp::where('email', $email)
             ->where('otp', $otpCode)
             ->where('type', $type)
             ->where('is_used', false)

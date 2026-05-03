@@ -15,6 +15,7 @@ return new class extends Migration
              $table->id();
             $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
             $table->string('skills')->nullable();
+             $table->string('region')->nullable();
             $table->string('availability')->nullable();
             $table->integer('total_hours')->default(0);
             $table->enum('status', ['pending', 'active', 'inactive'])->default('pending');
