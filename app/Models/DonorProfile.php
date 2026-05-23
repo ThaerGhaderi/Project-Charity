@@ -6,13 +6,9 @@ use Illuminate\Database\Eloquent\Model;
 
 class DonorProfile extends Model
 {
-    protected $fillable = [
+   protected $fillable = [
         'user_id',
-        'skills',
-        'availability',
-        'total_hours',
-        'status',
-        'region',
+        'bio',
         
     ];
 

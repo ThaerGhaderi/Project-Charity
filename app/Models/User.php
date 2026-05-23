@@ -31,10 +31,13 @@ class User extends Authenticatable implements MustVerifyEmail
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
-            
+
         ];
     }
-
+    public function profile()
+    {
+        return $this->hasOne(Profile::class);
+    }
     public function donor()
     {
         return $this->hasOne(DonorProfile::class);

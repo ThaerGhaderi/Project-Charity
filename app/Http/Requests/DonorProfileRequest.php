@@ -14,22 +14,21 @@ class DonorProfileRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'skills' => 'required|string|max:500',
-            'availability' => 'required|string|max:255',
-            'region' => 'required|string|max:255',
-            'total_donated' => 'nullable|numeric|min:0',
+        'city_id'        => 'required|exists:cities,id',
+        'photo_id'       => 'required|image|mimes:jpg,jpeg,png|max:5000',
+        'phone'          => 'required|string|max:10|unique:profiles,phone',
+        'birth_date'     => 'required|date',
+        'gender'         => 'required|in:ذكر,انثى',
+        'Personal_photo' => 'nullable|image|mimes:jpg,jpeg,png|max:5000',
+        // Donor specific
+        'bio'            => 'nullable|string|max:255',
         ];
     }
 
     public function messages(): array
     {
         return [
-            'skills.required' => 'Skills field is required.',
-            'skills.max' => 'Skills cannot exceed 500 characters.',
-            'availability.required' => 'Availability field is required.',
-            'region.required' => 'Region field is required.',
-            'total_donated.numeric' => 'Total donated must be a number.',
-            'total_donated.min' => 'Total donated cannot be negative.'
+
         ];
     }
 }

@@ -1,17 +1,13 @@
 <?php
-
 namespace App\Services;
-
 use App\Models\Otp;
 use Illuminate\Support\Facades\Mail;
-
 class OtpService
 {
     public function generateOtp(): string
     {
         return str_pad(random_int(0, 99999), 5, '0', STR_PAD_LEFT);
     }
-
     public function sendOtp(string $email, string $type = 'verification'): Otp
     {
         // حذف الـ OTP القديمة لنفس البريد الإلكتروني ونفس النوع
@@ -38,12 +34,12 @@ class OtpService
 
     public function verifyOtp(string $email, string $otpCode, string $type = 'verification'): bool
     {
-        $otp = Otp::where('email', $email)
-            ->where('otp', $otpCode)
-            ->where('type', $type)
-            ->where('is_used', false)
-            ->first();
-
+     $otp = Otp::where('email', $email)
+    ->where('otp', trim((string)$otpCode))
+    ->where('type', $type)
+    ->where('is_used', false)
+    ->latest()
+    ->first();
         if (!$otp || !$otp->isValid()) {
             return false;
         }
