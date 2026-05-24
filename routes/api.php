@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\DonorProfileController;
 use App\Http\Controllers\Api\VolunteerProfileController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\CityController;
+use App\Http\Controllers\DayController;
 use App\Http\Controllers\DomainController;
 use App\Http\Controllers\DonorProfileController as ControllersDonorProfileController;
 use App\Http\Controllers\SkillController;
@@ -49,7 +50,9 @@ Route::prefix('auth')->group(function () {
         Route::post('/complete-profile', [ControllersVolunterProfileController::class, 'completeProfile']);
         Route::get('/get-profile', [ControllersVolunterProfileController::class, 'getProfile']);
         Route::get('/categories', [CategoryController::class, 'index']);
+        Route::get('/cities', [CityController::class, 'index']);
         Route::get('/domains', [DomainController::class, 'index']);
+        Route::get('/days',[DayController::class,'index']);
         Route::get('/skills', [SkillController::class, 'index']);
  });
   });

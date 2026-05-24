@@ -15,7 +15,7 @@ return new class extends Migration
             $table->bigInteger('total_donated')->default(0);
             $table->integer('loyalty_points')->default(0);
             $table->enum('loyalty_tier',['برونزية','فضية','ذهبية'])->nullable();
-            $table->string('bio',255);
+            $table->string('bio',255)->nullable();
             $table->timestamps();
         });
     }
