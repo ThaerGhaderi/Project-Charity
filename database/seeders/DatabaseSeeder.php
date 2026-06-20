@@ -22,6 +22,9 @@ class DatabaseSeeder extends Seeder
         SkillSeeder::class,
         CategorySeeder::class,
         TypeSeeder::class,
+            DonorSeeder::class,
+            CampaignSeeder::class,
+            RandomDonationsSeeder::class,
      ]);
         /*User::factory()->create([
             'name' => 'Test User',

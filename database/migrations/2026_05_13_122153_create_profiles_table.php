@@ -20,6 +20,7 @@ return new class extends Migration
             $table->date('birth_date');
             $table->enum('gender',['ذكر','انثى']);
             $table->string('Personal_photo')->nullable();
+             $table->text('bio')->nullable();
             $table->timestamps();
         });
     }
