@@ -8,7 +8,7 @@ class RecurringDonation extends Model
 {
     protected $fillable = [
         'donation_id',
-        'user_id',
+        'donor_id',      // ✅ تغيير من user_id
         'campaign_id',
         'amount',
         'frequency',
@@ -28,9 +28,16 @@ class RecurringDonation extends Model
         return $this->belongsTo(Donation::class);
     }
 
+    // ✅ العلاقة مع DonorProfile
+    public function donor()
+    {
+        return $this->belongsTo(DonorProfile::class);
+    }
+
+    // ✅ shortcut للمستخدم
     public function user()
     {
-        return $this->belongsTo(User::class);
+        return $this->hasOneThrough(User::class, DonorProfile::class, 'id', 'id', 'donor_id', 'user_id');
     }
 
     public function campaign()
@@ -54,16 +61,14 @@ class RecurringDonation extends Model
     public function processCharge()
     {
         // This would integrate with payment gateway
-        // For now, create a new donation record
         $donation = Donation::create([
-            'user_id' => $this->user_id,
+            'donor_id' => $this->donor_id,  // ✅ استخدام donor_id
             'campaign_id' => $this->campaign_id,
             'amount' => $this->amount,
             'status' => 'pending',
             'is_recurring' => true
         ]);
         
-        // Update next charge date based on frequency
         switch ($this->frequency) {
             case 'daily':
                 $this->next_charge_date = now()->addDay()->toDateString();

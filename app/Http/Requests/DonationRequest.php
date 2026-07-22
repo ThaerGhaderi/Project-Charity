@@ -14,6 +14,7 @@ class DonationRequest extends FormRequest
     public function rules()
     {
         return [
+            'donor_id' => 'nullable|exists:donor_profiles,id',
             'campaign_id' => 'required|exists:campaigns,id',
             'amount' => 'required|numeric|min:1|max:100000',
             'currency' => 'sometimes|string|size:3',

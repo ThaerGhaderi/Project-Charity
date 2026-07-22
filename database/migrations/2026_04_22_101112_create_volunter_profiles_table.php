@@ -21,6 +21,8 @@ return new class extends Migration
             $table->enum('Educational_level',['ثانوية عامة','بكالوريوس','ماستر','دكتوراة','معهد']);
             $table->string('facebook')->nullable();
             $table->string('linkedin')->nullable();
+            $table->integer('points')->default(0);  
+            $table->integer('rank')->nullable();  
             $table->timestamps();
         });
     }

@@ -44,7 +44,9 @@ return [
     'secret' => env('STRIPE_SECRET'),
     'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
     'currency' => env('STRIPE_CURRENCY', 'usd'),
+    
 ],
+'frontend_url' => env('FRONTEND_URL', 'http://127.0.0.1:8000'),
 
     'facebook' => [
         'client_id' => env('FACEBOOK_CLIENT_ID'),

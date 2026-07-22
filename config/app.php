@@ -17,9 +17,11 @@ return [
             explode(',', (string) env('APP_PREVIOUS_KEYS', ''))
         ),
     ],
+    'frontend_url' => env('FRONTEND_URL', 'http://127.0.0.1:8000'),
     'maintenance' => [
         'driver' => env('APP_MAINTENANCE_DRIVER', 'file'),
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
+        
     ],
 
     /*
@@ -58,11 +60,9 @@ return [
 
         // Application Service Providers
         App\Providers\AppServiceProvider::class,
-        // App\Providers\AuthServiceProvider::class,     // ✅ علقه (غير موجود)
-        // App\Providers\BroadcastServiceProvider::class,
-       // App\Providers\EventServiceProvider::class,
-       // App\Providers\RouteServiceProvider::class,
         App\Providers\FirebaseNotificationServiceProvider::class,
+         App\Providers\BroadcastServiceProvider::class,      // ✅ فك التعليق (مهم للدردشة)
+    App\Providers\EventServiceProvider::class,    
     ],
 
     /*

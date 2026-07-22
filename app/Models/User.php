@@ -60,9 +60,9 @@ class User extends Authenticatable
     }
 
     public function donations()
-    {
-        return $this->hasMany(Donation::class);
-    }
+{
+    return $this->hasMany(Donation::class, 'donor_id', 'id');
+}
 
     public function recurringDonations()
     {
@@ -143,4 +143,39 @@ class User extends Authenticatable
     {
         return $this->role === 'Beneficiary';
     }
+
+
+    public function aidApplications()
+{
+    return $this->hasMany(AidApplication::class);
+}
+
+public function reviewedApplications()
+{
+    return $this->hasMany(AidApplication::class, 'reviewed_by');
+}
+public function sponsorships()
+{
+    return $this->hasMany(Sponsorship::class, 'sponsor_id');
+}
+
+public function beneficiarySponsorships()
+{
+    return $this->hasMany(Sponsorship::class, 'beneficiary_id');
+}
+
+public function sponsorshipMessages()
+{
+    return $this->hasMany(SponsorshipMessage::class, 'sender_id');
+}
+
+public function receivedSponsorshipMessages()
+{
+    return $this->hasMany(SponsorshipMessage::class, 'receiver_id');
+}
+
+public function approvedSponsorships()
+{
+    return $this->hasMany(Sponsorship::class, 'approved_by');
+}
 }

@@ -32,5 +32,10 @@ class BeneficiaryProfile extends Model
     {
         return $this->belongsToMany(Type::class,'beneficiary_types');
     }
+
+    public function aidApplications()
+{
+    return $this->hasMany(AidApplication::class, 'beneficiary_profile_id');
+}
 }
 

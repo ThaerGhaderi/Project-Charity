@@ -1,6 +1,5 @@
 <?php
 
-
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
@@ -30,12 +29,12 @@ class DonorProfile extends Model
         return $this->belongsTo(User::class);
     }
 
+    // ✅ العلاقة الصحيحة مع التبرعات
     public function donations()
     {
-        return $this->hasManyThrough(Donation::class, User::class, 'id', 'user_id', 'user_id', 'id');
+        return $this->hasMany(Donation::class);
     }
 
-    // Update loyalty tier based on points
     public function updateLoyaltyTier()
     {
         if ($this->loyalty_points >= 3000) {
@@ -52,7 +51,6 @@ class DonorProfile extends Model
         return $this;
     }
 
-    // Add points and update tier
     public function addPoints($points)
     {
         $this->loyalty_points += $points;
@@ -60,15 +58,11 @@ class DonorProfile extends Model
         return $this;
     }
 
-    // Add donation amount to total
     public function addDonation($amount)
     {
         $this->total_donated += $amount;
         $this->save();
-        
-        // Add loyalty points (1 point per $1)
         $this->addPoints((int)$amount);
-        
         return $this;
     }
 }

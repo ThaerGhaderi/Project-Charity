@@ -3,12 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\DonationRequest as RequestsDonationRequest;
 use App\Http\Requests\Donor\DonationRequest;
 use App\Models\Donation;
 use App\Models\Campaign;
 use App\Models\PaymentTransaction;
 use App\Models\Notification;
-use Illuminate\Http\Request;  // ✅ تصحيح: استخدم Illuminate\Http\Request
+use App\Models\User;
+use App\Models\VolunteerTask;
+use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 
@@ -17,7 +20,7 @@ class DomainController extends Controller
     /**
      * Create a new donation
      */
-    public function store(DonationRequest $request)
+    public function store(RequestsDonationRequest $request)
     {
         $user = $request->user();
         $campaign = Campaign::findOrFail($request->campaign_id);
@@ -102,7 +105,11 @@ class DomainController extends Controller
 
         $donation->markAsCompleted();
 
-        // Send notification to donor
+        // ✅ تحديث تقدم الحملة
+        $campaign = $donation->campaign;
+        $campaign->updateCollectedAmount();
+
+        // ✅ Send notification to donor (نفسه ما تغير)
         Notification::send(
             $donation->user_id,
             'تبرع ناجح',
@@ -110,13 +117,23 @@ class DomainController extends Controller
             'donation'
         );
 
+        // ✅ إشعار للمتطوعين عند وصول الحملة لنسبة 50%
+        if ($campaign->progress_percentage >= 50) {
+            $this->notifyVolunteersForCampaign($campaign);
+        }
+
+        // ✅ إنشاء مهام إضافية عند وصول الحملة لنسبة 75%
+        if ($campaign->progress_percentage >= 75) {
+            $this->createAdditionalTasksForCampaign($campaign);
+        }
+
         return true;
     }
 
     /**
      * Get donation receipt
      */
-    public function receipt($id, Request $request)  // ✅ تصحيح: أضف $request كمعامل
+    public function receipt($id, Request $request)
     {
         $user = $request->user();
         
@@ -166,7 +183,6 @@ class DomainController extends Controller
     {
         $user = $request->user();
         
-        // ✅ تصحيح: استخدم طريقة متوافقة مع جميع قواعد البيانات
         $monthlyTrend = Donation::where('user_id', $user->id)
             ->where('status', 'completed')
             ->where('donated_at', '>=', now()->subMonths(6))
@@ -205,5 +221,69 @@ class DomainController extends Controller
             'success' => true,
             'data' => $stats
         ], 200);
+    }
+
+    // ==================== PRIVATE METHODS ====================
+
+    /**
+     * إشعار للمتطوعين عند تقدم الحملة
+     */
+    private function notifyVolunteersForCampaign($campaign)
+    {
+        $volunteers = User::where('role', 'volunteer')
+            ->whereNotNull('fcm_token')
+            ->get();
+
+        $title = "🚀 حملة {$campaign->title} حققت {$campaign->progress_percentage}%";
+        $body = "انضم إلينا لاستكمال المهام التطوعية للحملة";
+
+        foreach ($volunteers as $volunteer) {
+            Notification::sendPushOnly(
+                $volunteer->id,
+                $title,
+                $body,
+                'campaign_progress',
+                ['campaign_id' => $campaign->id]
+            );
+        }
+    }
+
+    /**
+     * إنشاء مهام إضافية عند وصول الحملة لنسبة 75%
+     */
+    private function createAdditionalTasksForCampaign($campaign)
+    {
+        $admin = User::whereIn('role', ['admin', 'Admin'])->first();
+        $supervisorId = $admin ? $admin->id : 1;
+
+        $tasks = [
+            [
+                'title' => "مرحلة التوزيع النهائي - {$campaign->title}",
+                'description' => "توزيع المساعدات النهائية على المستفيدين",
+                'location' => $campaign->location ?? 'غير محدد',
+            ],
+            [
+                'title' => "توثيق الإنجازات - {$campaign->title}",
+                'description' => "توثيق إنجازات الحملة وتصوير المستفيدين",
+                'location' => $campaign->location ?? 'غير محدد',
+            ],
+            [
+                'title' => "تقييم الحملة - {$campaign->title}",
+                'description' => "تقييم نتائج الحملة وجمع الملاحظات",
+                'location' => $campaign->location ?? 'غير محدد',
+            ],
+        ];
+
+        foreach ($tasks as $taskData) {
+            VolunteerTask::create([
+                'campaign_id' => $campaign->id,
+                'title' => $taskData['title'],
+                'description' => $taskData['description'],
+                'location' => $taskData['location'],
+                'status' => 'جديدة',
+                'supervisor_id' => $supervisorId,
+                'expected_end_time' => now()->addDays(5),
+            ]);
+        }
     }
 }

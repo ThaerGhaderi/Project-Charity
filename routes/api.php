@@ -1,4 +1,6 @@
 <?php
+
+use App\Http\Controllers\AidApplicationController;
 use App\Http\Controllers\DonorProfileController;
 use App\Http\Controllers\CampaignController;
 use App\Http\Controllers\DomainController;
@@ -11,12 +13,17 @@ use App\Http\Controllers\RecurringDonationController;
 use App\Http\Controllers\RefundController;
 use App\Http\Controllers\BeneficiaryProfileController;
 use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\CertificateController;
+use App\Http\Controllers\ChatController;
 use App\Http\Controllers\CityController;
 use App\Http\Controllers\DayController;
 use App\Http\Controllers\SkillController;
+use App\Http\Controllers\SponsorshipController;
 use App\Http\Controllers\TypeController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\VisitController;
+use App\Http\Controllers\VolunteerTaskController;
 use App\Http\Controllers\VolunterProfileController as ControllersVolunterProfileController;
 use App\Models\Donation;
 
@@ -40,17 +47,36 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // ==================== BENEFICIARY ROUTES ====================
     Route::prefix('beneficiary')->group(function () {
-        Route::post('/complete-profile', [BeneficiaryProfileController::class, 'completeProfile']);
-        Route::get('/profile', [BeneficiaryProfileController::class, 'getProfile']);
-        Route::put('/profile', [BeneficiaryProfileController::class, 'updateProfile']);
+        Route::post('/complete-profile', [BeneficiaryProfileController::class, 'completeProfile']);//!اكمال الملف الشخصي
+        Route::get('/profile', [BeneficiaryProfileController::class, 'getProfile']);//!جلب الملف الشخصي
+        Route::put('/profile', [BeneficiaryProfileController::class, 'updateProfile']);//!تحديث الملف الشخصي
         
          //Aid Applications
-        // Route::post('/aid-applications', [AidApplicationController::class, 'store']);
-        // Route::get('/aid-applications', [AidApplicationController::class, 'index']);
-        // Route::get('/aid-applications/{id}', [AidApplicationController::class, 'show']);
-        // Route::put('/aid-applications/{id}', [AidApplicationController::class, 'update']);
-        
-        // Helpers
+      Route::get('/aid-applications/statistics', [AidApplicationController::class, 'statistics']);//!احصائيات طلبات المساعدة
+    Route::get('/aid-applications/types', [AidApplicationController::class, 'types']);//!جلب أنواع المساعدة
+    Route::get('/aid-applications/statuses', [AidApplicationController::class, 'statuses']);//!انواع حالات الطلبات
+    Route::post('/aid-applications', [AidApplicationController::class, 'store']);//!انشاء طلب مساعدة
+    Route::get('/aid-applications/{id}', [AidApplicationController::class, 'show']);//!اظهار تفاصيل طلب 
+    Route::put('/aid-applications/{id}', [AidApplicationController::class, 'update']);//!تعديل حالة طلب معين
+    Route::delete('/aid-applications/{id}', [AidApplicationController::class, 'destroy']);//!حذف طلب معين
+ Route::get('/aid-applications', [AidApplicationController::class, 'index']);//!ارجاع الطلبات مع تصفية حسب الطلب
+
+/* للادمن
+     Route::get('/aid-applications-admin', [AidApplicationController::class, 'adminIndex']);//!ارجاع 
+    Route::put('/aid-applications/{id}/status', [AidApplicationController::class, 'updateStatus']);//! تغيير حالة الطلب
+       
+    */
+   
+     Route::prefix('visits')->group(function () {
+        Route::get('/statistics', [VisitController::class, 'statistics']);//!جلب إحصائيات الزيارات
+        Route::get('/', [VisitController::class, 'index']);//!جلب جميع الزيارات مع تصفية حسب الطلب
+        Route::post('/', [VisitController::class, 'store']);//!انشاء زيارة جديدة
+        Route::get('/{id}', [VisitController::class, 'show']);//!اظهار تفاصيل زيارة معينة
+        Route::put('/{id}', [VisitController::class, 'update']);//!تحديث زيارة
+        Route::delete('/{id}', [VisitController::class, 'destroy']);//!حذف زيارة
+    });
+
+
         Route::get('/cities', [CityController::class, 'index']);
         Route::get('/type-needs', [TypeController::class, 'index']);
     });
@@ -84,15 +110,15 @@ Route::middleware('auth:sanctum')->group(function () {
      //   Route::get('/donations/{id}/qr', [DonationController::class, 'getDonationQR']);
         
         // ✅ Check Payment Status (بدلاً من صفحات Redirect)
-        Route::get('/payments/{donation}/status', [DonationController::class, 'checkPaymentStatus']);
+        Route::get('/payments/{donation}/status', [DonationController::class, 'checkPaymentStatus']);//! ليس للربط
         
-        // Recurring Donations
+        
         Route::post('/recurring', [RecurringDonationController::class, 'subscribe']);//!انشاء تبرع متكرر
         Route::get('/recurring', [RecurringDonationController::class, 'index']);//!جلب جميع التبرعات المتكررة للمستخدم
         Route::get('/recurring/{id}', [RecurringDonationController::class, 'show']);//!جلب تفاصيل تبرع متكرر معين
         Route::delete('/recurring/{id}', [RecurringDonationController::class, 'cancel']);//!إلغاء تبرع متكرر معين
         
-        // Donation Cart
+       
         Route::get('/cart', [DonationCartController::class, 'index']);//!جلب عناصر السلة
         Route::post('/cart', [DonationCartController::class, 'add']);//!اضافة عنصر للسلة
         Route::put('/cart/{id}', [DonationCartController::class, 'update']);//!تحديث عنصر في السلة
@@ -100,7 +126,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/cart', [DonationCartController::class, 'clear']);//!تفريغ السلة
         Route::post('/cart/checkout', [DonationCartController::class, 'checkout']);//!إتمام عملية الشراء (التحويل إلى تبرعات فعلية)
         
-        // Loyalty Points
+       
         Route::get('/loyalty', [LoyaltyPointsController::class, 'index']);//!جلب نقاط الولاء للمستخدم
         Route::get('/loyalty/leaderboard', [LoyaltyPointsController::class, 'leaderboard']);//!جلب قائمة المتبرعين الأعلى تبرعاً
         Route::get('/loyalty/rank', [LoyaltyPointsController::class, 'rank']);//!جلب ترتيب المستخدم بين المتبرعين
@@ -119,22 +145,67 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/cities', [CityController::class, 'index']);
 
 
-         Route::post('/donations/stripe', [DonationController::class, 'createStripePayment']);
-    Route::post('/donations/stripe/confirm', [DonationController::class, 'confirmStripePayment']);
+         Route::post('/donations/stripe', [DonationController::class, 'createStripePayment']);//!دفع عبر stripe
+        
+    //Route::post('/donations/stripe/confirm', [DonationController::class, 'confirmStripePayment']);
     });
 
     // ==================== VOLUNTEER ROUTES ====================
     Route::prefix('volunteer')->group(function () {
-        Route::post('/complete-profile', [ControllersVolunterProfileController::class, 'completeProfile']);
+        Route::post('/complete-profile', [ControllersVolunterProfileController::class, 'completeProfile']);//!اكمال الملف الشخصي
         Route::get('/profile', [ControllersVolunterProfileController::class, 'getProfile']);
         Route::put('/profile', [ControllersVolunterProfileController::class, 'updateProfile']);
-        
+         Route::get('/statistics', [VolunteerTaskController::class, 'statistics']);//!جلب إحصائيات المتطوع
+Route::prefix('tasks')->group(function () {
+        Route::get('/', [VolunteerTaskController::class, 'index']);//!جلب جميع المهام مع تصفية حسب الطلب
+        Route::get('/current', [VolunteerTaskController::class, 'currentTask']); //!جلب المهمة الحالية للمتطوع
+        Route::get('/{id}', [VolunteerTaskController::class, 'show']);         //!جلب تفاصيل مهمة معينة
+        Route::post('/{id}/start', [VolunteerTaskController::class, 'startTask']); //!بدء مهمة معينة
+        Route::post('/{id}/end', [VolunteerTaskController::class, 'endTask']);   //!إنهاء مهمة معينة
+    });
+    
+    // ✅ التقييمات (جديد)
+    Route::get('/evaluations', [VolunteerTaskController::class, 'evaluations']); //!جلب جميع التقييمات للمتطوع 
+    
+    // ✅ الشهادات (جديد)
+    Route::get('/certificates', [CertificateController::class, 'index']);  //!جلب جميع الشهادات للمتطوع
+    Route::get('/points', [VolunteerTaskController::class, 'points']);//!
+    Route::get('/leaderboard', [VolunteerTaskController::class, 'leaderboard']);
+
+
+
         Route::get('/categories', [CategoryController::class, 'index']);
         Route::get('/cities', [CityController::class, 'index']);
         Route::get('/domains', [DomainController::class, 'index']);
         Route::get('/days', [DayController::class, 'index']);
         Route::get('/skills', [SkillController::class, 'index']);
     });
+
+
+    Route::prefix('sponsorships')->middleware('auth:sanctum')->group(function () {
+    // إحصائيات الكفالات
+    Route::get('/statistics', [SponsorshipController::class, 'statistics']);//!احصائيات الكفالات
+    
+    // المستفيدين المتاحين (للمتبرعين)
+    Route::get('/available-beneficiaries', [SponsorshipController::class, 'availableBeneficiaries']);//!جلب المستفيدين المتاحين للكفالة
+    
+    
+    Route::get('/', [SponsorshipController::class, 'index']);//!جلب الكفالات 
+    Route::post('/', [SponsorshipController::class, 'store']);//!انشاء كفالة 
+    Route::get('/{id}', [SponsorshipController::class, 'show']);//!عرض الكفالات
+    Route::put('/{id}', [SponsorshipController::class, 'update']);//!تعديل الكفالة والادمن يمكنه تغيير حالة الكفالة
+    Route::delete('/{id}', [SponsorshipController::class, 'destroy']);//!حذف كفالة
+    
+    Route::get('/{id}/payments', [SponsorshipController::class, 'payments']);//!جلب دفعات الكفالة
+    Route::post('/{id}/payments', [SponsorshipController::class, 'addPayment']);//!إضافة دفعة للكفالة
+    
+ 
+    Route::get('/{id}/messages', [SponsorshipController::class, 'messages']);//!ارجاع الرسائل بين المستفيد والكافل
+    Route::post('/{id}/messages', [SponsorshipController::class, 'sendMessage']);//!تبادل الرسائل بين الكافل والمستفيد
+    
+});
+
+
 
     // ==================== NOTIFICATIONS ROUTES ====================
     Route::prefix('notifications')->group(function () {
@@ -154,14 +225,25 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 });
 
+Route::prefix('chat')->middleware('auth:sanctum')->group(function () {
+    
+    Route::get('/conversations', [ChatController::class, 'conversations']);//!ارجاع المحادثات الموجودة
+    Route::post('/conversations', [ChatController::class, 'createConversation']);//!انشاء دردشة فردية او غروب 
+    Route::post('/conversations/{id}/leave', [ChatController::class, 'leaveConversation']);//! مغادرة المحادثة 
+    Route::post('/conversations/{id}/read', [ChatController::class, 'markAsRead']);//! جعل المحادثة مقروءة
+    Route::post('/conversations/{id}/typing', [ChatController::class, 'typing']);//! اظهار اشارة يكتب 
+    Route::get('/conversations/{id}/messages', [ChatController::class, 'messages']);//!ارجاع الرسائل في المحادثة
+    Route::post('/conversations/{id}/messages', [ChatController::class, 'sendMessage']);//!ارسال رسالة في المحادثة
+});
+
 // ==================== SHARED ROUTES (Public) ====================
 Route::get('/cities', [CityController::class, 'index']);
 Route::get('/categories', [CategoryController::class, 'index']);
-
+ Route::post('/stripe/webhook', [DonationController::class, 'handleStripeWebhook'])//!ليس للربط
+    ->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class);
 // ==================== PAYERURL WEBHOOK (No Auth, No CSRF) ====================
 /*Route::post('/payerurl/webhook', [DonationController::class, 'handlePayerurlWebhook'])
     ->name('payerurl.webhook')
     ->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class);*/
 
-
-    
+//

@@ -10,8 +10,8 @@ return new class extends Migration
     {
         Schema::create('recurring_donations', function (Blueprint $table) {
             $table->id();
+             $table->foreignId('donor_id')->constrained('donor_profiles')->onDelete('cascade');
             $table->foreignId('donation_id')->constrained()->onDelete('cascade');
-            $table->foreignId('user_id')->constrained()->onDelete('cascade');
             $table->foreignId('campaign_id')->constrained()->onDelete('cascade');
             $table->decimal('amount', 12, 2);
             $table->enum('frequency', ['daily', 'weekly', 'monthly']);

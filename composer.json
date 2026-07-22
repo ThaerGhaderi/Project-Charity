@@ -8,13 +8,16 @@
     "require": {
         "php": "^8.2",
         "barryvdh/laravel-dompdf": "^3.1",
+        "dompdf/dompdf": "*",
         "kreait/laravel-firebase": "6.2",
         "laravel/framework": "^12.0",
         "laravel/sanctum": "^4.0",
         "laravel/socialite": "^5.27",
         "laravel/tinker": "^2.10.1",
+        "mpdf/mpdf": "*",
         "payerurl/binance-and-crypto-checkout": "^1.0",
-        "stripe/stripe-php": "^20.2"
+        "pusher/pusher-php-server": "^7.2",
+        "stripe/stripe-php": "^20.3"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",

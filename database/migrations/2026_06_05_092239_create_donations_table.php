@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('donations', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('user_id')->constrained()->onDelete('cascade');
+           $table->foreignId('donor_id')->constrained('donor_profiles')->onDelete('cascade');
             $table->foreignId('campaign_id')->constrained()->onDelete('cascade');
             $table->decimal('amount', 12, 2);
             $table->string('currency', 5)->default('USD');

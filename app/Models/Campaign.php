@@ -84,11 +84,13 @@ class Campaign extends Model
         return max(0, $this->goal_amount - $this->collected_amount);
     }
 
-    public function getDonorsCountAttribute()
-    {
-        return $this->donations()->where('status', 'completed')->distinct('user_id')->count('user_id');
-    }
-
+   public function getDonorsCountAttribute()
+{
+    return $this->donations()
+        ->where('status', 'completed')
+        ->distinct('donor_id')  // ✅ تغيير إلى donor_id
+        ->count('donor_id');     // ✅ تغيير إلى donor_id
+}
     public function updateCollectedAmount()
     {
         $this->collected_amount = $this->donations()
@@ -104,4 +106,9 @@ class Campaign extends Model
         
         return $this;
     }
+      public function volunteerTasks()
+    {
+        return $this->hasMany(VolunteerTask::class);
+    }
+
 }

@@ -17,8 +17,8 @@ class GiftDonationController extends Controller
     public function store(RequestsGiftDonationRequest $request)
     {
         $user = $request->user();
-        
-        $donation = Donation::where('user_id', $user->id)
+         $donor = $user->donor;
+        $donation = Donation::where('donor_id', $donor->id)
             ->where('id', $request->donation_id)
             ->where('status', 'completed')
             ->firstOrFail();
@@ -63,13 +63,21 @@ class GiftDonationController extends Controller
     /**
      * Get gift donations for user
      */
-    public function index(Request $request)
+     public function index(Request $request)
     {
         $user = $request->user();
+        $donor = $user->donor;  // ✅ جلب ملف المتبرع
+        
+        if (!$donor) {
+            return response()->json([
+                'success' => false,
+                'message' => 'لم يتم العثور على ملف المتبرع'
+            ], 404);
+        }
         
         $gifts = GiftDonation::with(['donation.campaign'])
-            ->whereHas('donation', function($q) use ($user) {
-                $q->where('user_id', $user->id);
+            ->whereHas('donation', function($q) use ($donor) {
+                $q->where('donor_id', $donor->id);  // ✅ استخدام donor_id
             })
             ->get();
 
@@ -78,17 +86,24 @@ class GiftDonationController extends Controller
             'data' => $gifts
         ], 200);
     }
-
     /**
      * Get gift details
      */
     public function show($id, Request $request)
     {
         $user = $request->user();
+        $donor = $user->donor;  // ✅ جلب ملف المتبرع
+        
+        if (!$donor) {
+            return response()->json([
+                'success' => false,
+                'message' => 'لم يتم العثور على ملف المتبرع'
+            ], 404);
+        }
         
         $gift = GiftDonation::with(['donation.campaign'])
-            ->whereHas('donation', function($q) use ($user) {
-                $q->where('user_id', $user->id);
+            ->whereHas('donation', function($q) use ($donor) {
+                $q->where('donor_id', $donor->id);  // ✅ استخدام donor_id
             })
             ->where('id', $id)
             ->firstOrFail();

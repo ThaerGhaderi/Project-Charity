@@ -83,22 +83,20 @@ class StripeService
     /**
      * التحقق من توقيع Webhook
      */
-    public function verifyWebhookSignature($payload, $signature): bool
-    {
-        try {
-            $event = Webhook::constructEvent(
-                $payload,
-                $signature,
-                $this->webhookSecret
-            );
-            
-            return true;
-        } catch (SignatureVerificationException $e) {
-            Log::error('Stripe webhook signature verification failed: ' . $e->getMessage());
-            return false;
-        }
+   public function verifyWebhookSignature($payload, $signature)
+{
+    try {
+        $event = \Stripe\Webhook::constructEvent(
+            $payload,
+            $signature,
+            $this->webhookSecret
+        );
+        return true;
+    } catch (\Exception $e) {
+        Log::error('Stripe webhook verification failed: ' . $e->getMessage());
+        return false;
     }
-
+}
     /**
      * معالجة Webhook Event
      */

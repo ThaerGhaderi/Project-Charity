@@ -13,34 +13,32 @@ use Faker\Factory as Faker;
 
 class RandomDonationsSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
+    
     public function run(): void
     {
         $faker = Faker::create();
 
-        // 1. التأكد من وجود مستخدمين وحملات
+       
         $users = User::where('role', 'Donor')->where('profile_completed', true)->get();
         $campaigns = Campaign::where('status', 'active')->get();
 
         if ($users->isEmpty()) {
-            $this->command->warn('⚠️ No donors found. Please create donors first.');
-            $this->command->warn('   You can run: php artisan db:seed --class=UserSeeder');
+            $this->command->warn(' لا يوجد متبرعين. يرجى إنشاء متبرعين أولاً.');
+            $this->command->warn('   يمكنك تشغيل: php artisan db:seed --class=DonorSeeder');
             return;
         }
 
         if ($campaigns->isEmpty()) {
-            $this->command->warn('⚠️ No campaigns found. Please create campaigns first.');
-            $this->command->warn('   You can run: php artisan db:seed --class=CampaignSeeder');
+            $this->command->warn(' لا يوجد حملات. يرجى إنشاء حملات أولاً.');
+            $this->command->warn('   يمكنك تشغيل: php artisan db:seed --class=CampaignSeeder');
             return;
         }
 
         // 2. إعدادات الـ seeder
-        $numberOfDonations = $this->command->ask('How many donations to create?', 50);
+        $numberOfDonations = $this->command->ask('كم عدد التبرعات التي تريد إنشاؤها؟', 50);
         $numberOfDonations = (int) $numberOfDonations;
 
-        $this->command->info("🚀 Creating {$numberOfDonations} random donations...");
+        $this->command->info(" جاري إنشاء {$numberOfDonations} تبرع عشوائي...");
 
         $progressBar = $this->command->getOutput()->createProgressBar($numberOfDonations);
         $progressBar->start();
@@ -53,11 +51,11 @@ class RandomDonationsSeeder extends Seeder
         $donationsCreated = 0;
 
         for ($i = 0; $i < $numberOfDonations; $i++) {
-            // اختيار مستخدم وحملة عشوائية
+          
             $user = $users->random();
             $campaign = $campaigns->random();
 
-            // بيانات عشوائية
+            
             $amount = $faker->randomFloat(2, 5, 500);
             $status = $faker->randomElement($donationStatuses);
             $paymentMethod = $faker->randomElement($paymentMethods);
@@ -67,15 +65,14 @@ class RandomDonationsSeeder extends Seeder
             $isRecurring = $faker->boolean(10);
             $isGift = $faker->boolean(5);
 
-            // تاريخ عشوائي خلال الـ 3 أشهر الماضية
+            
             $donatedAt = $faker->dateTimeBetween('-3 months', 'now');
 
             try {
                 DB::beginTransaction();
 
-                // إنشاء التبرع
-                $donation = Donation::create([
-                    'user_id' => $user->id,
+               
+                $donationData = [
                     'campaign_id' => $campaign->id,
                     'amount' => $amount,
                     'currency' => $currency,
@@ -91,9 +88,21 @@ class RandomDonationsSeeder extends Seeder
                     'donated_at' => $donatedAt,
                     'created_at' => $donatedAt,
                     'updated_at' => $donatedAt,
-                ]);
+                ];
 
-                // إنشاء معاملة دفع إذا كان التبرع مكتملاً
+               
+                try {
+                  
+                    $donationData['donor_id'] = $user->id;
+                    $donation = Donation::create($donationData);
+                } catch (\Exception $e) {
+                   
+                    unset($donationData['donor_id']);
+                    $donationData['user_id'] = $user->id;
+                    $donation = Donation::create($donationData);
+                }
+
+               
                 if ($status === 'completed') {
                     PaymentTransaction::create([
                         'donation_id' => $donation->id,
@@ -107,11 +116,11 @@ class RandomDonationsSeeder extends Seeder
                         'updated_at' => $donatedAt,
                     ]);
 
-                    // تحديث المبلغ المجمع في الحملة
+                   
                     $campaign->collected_amount += $amount;
                     $campaign->save();
 
-                    // تحديث ملف المتبرع
+                  
                     if ($user->donor) {
                         $user->donor->total_donated += $amount;
                         $user->donor->loyalty_points += (int) $amount;
@@ -137,7 +146,7 @@ class RandomDonationsSeeder extends Seeder
 
             } catch (\Exception $e) {
                 DB::rollBack();
-                $this->command->warn("❌ Failed to create donation: " . $e->getMessage());
+                $this->command->warn("❌ فشل إنشاء التبرع: " . $e->getMessage());
             }
 
             $progressBar->advance();
@@ -145,15 +154,13 @@ class RandomDonationsSeeder extends Seeder
 
         $progressBar->finish();
         $this->command->newLine(2);
-        $this->command->info("✅ Successfully created {$donationsCreated} random donations!");
+        $this->command->info(" تم إنشاء {$donationsCreated} تبرع عشوائي بنجاح!");
 
-        // عرض إحصائيات
+        
         $this->showStatistics();
     }
 
-    /**
-     * عرض إحصائيات بعد الإنشاء
-     */
+  
     private function showStatistics(): void
     {
         $totalDonations = Donation::count();
@@ -163,15 +170,15 @@ class RandomDonationsSeeder extends Seeder
         $totalDonors = User::where('role', 'Donor')->count();
 
         $this->command->newLine();
-        $this->command->info("📊 Statistics:");
-        $this->command->line("   📋 Total Donations: {$totalDonations}");
-        $this->command->line("   ✅ Completed: {$totalCompleted}");
-        $this->command->line("   💰 Total Amount: $" . number_format($totalAmount, 2));
-        $this->command->line("   📢 Campaigns: {$totalCampaigns}");
-        $this->command->line("   👤 Donors: {$totalDonors}");
+        $this->command->info(" الإحصائيات:");
+        $this->command->line("   إجمالي التبرعات: {$totalDonations}");
+        $this->command->line("    المكتملة: {$totalCompleted}");
+        $this->command->line("    إجمالي المبلغ: $" . number_format($totalAmount, 2));
+        $this->command->line("    الحملات: {$totalCampaigns}");
+        $this->command->line("    المتبرعين: {$totalDonors}");
         $this->command->newLine();
 
-        // عرض أفضل 5 حملات
+       
         $topCampaigns = Campaign::withCount(['donations as total_donations' => function($q) {
                 $q->where('status', 'completed');
             }])
@@ -182,14 +189,14 @@ class RandomDonationsSeeder extends Seeder
             ->limit(5)
             ->get();
 
-        $this->command->info("🏆 Top 5 Campaigns:");
+        $this->command->info(" أفضل 5 حملات:");
         foreach ($topCampaigns as $campaign) {
             $amount = $campaign->total_amount ?? 0;
             $donations = $campaign->total_donations ?? 0;
-            $this->command->line("   📌 {$campaign->title}: $" . number_format($amount, 2) . " ({$donations} donations)");
+            $this->command->line("   {$campaign->title}: $" . number_format($amount, 2) . " ({$donations} تبرع)");
         }
 
-        // عرض أفضل 5 متبرعين
+        
         $topDonors = User::whereHas('donor')
             ->with('donor')
             ->get()
@@ -199,11 +206,11 @@ class RandomDonationsSeeder extends Seeder
             ->take(5);
 
         $this->command->newLine();
-        $this->command->info("🥇 Top 5 Donors:");
+      //  $this->command->info("🥇 أفضل 5 متبرعين:");
         foreach ($topDonors as $user) {
             $total = $user->donor->total_donated ?? 0;
             $tier = $user->donor->loyalty_tier ?? 'بدون';
-            $this->command->line("   👤 {$user->name}: $" . number_format($total, 2) . " ({$tier})");
+            $this->command->line("   {$user->name}: $" . number_format($total, 2) . " ({$tier})");
         }
     }
 }

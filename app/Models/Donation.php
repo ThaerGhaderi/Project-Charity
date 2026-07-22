@@ -6,33 +6,48 @@ use Illuminate\Database\Eloquent\Model;
 
 class Donation extends Model
 {
+    protected $table = 'donations';
+    
     protected $fillable = [
-        'user_id',
+        'donor_id',           // ✅ تغيير من user_id
         'campaign_id',
         'amount',
         'currency',
         'payment_method',
+        'payment_gateway',
         'status',
+        'gateway_status',
         'is_anonymous',
         'is_recurring',
+        'is_gift',
         'on_behalf_of',
         'gift_message',
-        'receipt_url'
+        'receipt_url',
+        'crypto_currency',
+        'crypto_amount',
+        'donated_at'
     ];
 
     protected $casts = [
         'amount' => 'decimal:2',
         'is_anonymous' => 'boolean',
         'is_recurring' => 'boolean',
+        'is_gift' => 'boolean',
         'donated_at' => 'datetime',
     ];
 
     protected $dates = ['donated_at'];
 
-    // Relationships
+    // ✅ العلاقة الصحيحة مع DonorProfile
+    public function donor()
+    {
+        return $this->belongsTo(DonorProfile::class);
+    }
+
+    // ✅ علاقة shortcut للمستخدم (عبر المتبرع)
     public function user()
     {
-        return $this->belongsTo(User::class);
+        return $this->hasOneThrough(User::class, DonorProfile::class, 'id', 'id', 'donor_id', 'user_id');
     }
 
     public function campaign()
@@ -45,9 +60,9 @@ class Donation extends Model
         return $this->hasOne(RecurringDonation::class);
     }
 
-  public function paymentTransaction()
+    public function paymentTransaction()
     {
-        return $this->hasOne(paymentTransaction::class);
+        return $this->hasOne(PaymentTransaction::class);
     }
 
     // Scopes
@@ -73,21 +88,27 @@ class Donation extends Model
         $this->save();
         
         // Update campaign collected amount
-        $this->campaign->updateCollectedAmount();
+        if ($this->campaign) {
+            $this->campaign->updateCollectedAmount();
+        }
         
-        // Update donor profile
-        if ($this->user && $this->user->donor) {
-            $this->user->donor->addDonation($this->amount);
+        // ✅ Update donor profile (مصحح)
+        if ($this->donor) {
+            $this->donor->addDonation($this->amount);
         }
         
         return $this;
     }
 
-    public function isRefundable()
-    {
-        // Only refundable within 24 hours
-        return $this->status === 'completed' && 
-               $this->donated_at->diffInHours(now()) <= 24;
+public function isRefundable(): bool
+{
+   
+    if ($this->status !== 'completed') {
+        return false;
     }
     
+    $refundableHours = config('donation.refundable_hours', 24);
+    
+    return $this->created_at->diffInHours(now()) <= $refundableHours;
+}
 }

@@ -1,34 +1,37 @@
 <?php
+// database/seeders/DatabaseSeeder.php
 
 namespace Database\Seeders;
 
-use App\Models\User;
-// use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
 {
-    /**
-     * Seed the application's database.
-     */
     public function run(): void
     {
-        // User::factory(10)->create();
-       $this->call([
-        CitySeeder::class,
-        DomainSeeder::class,
-        DaySeeder::class,
-        LanguageSeeder::class,
-        SkillSeeder::class,
-        CategorySeeder::class,
-        TypeSeeder::class,
+        $this->call([
+            // ✅ الجداول المرجعية
+            CitySeeder::class,
+            DomainSeeder::class,
+            DaySeeder::class,
+            LanguageSeeder::class,
+            SkillSeeder::class,
+            CategorySeeder::class,
+            TypeSeeder::class,
+            
+            // ✅ المستخدمين
             DonorSeeder::class,
+             BeneficiarySeeder::class, // إذا كان موجوداً
+             VolunteerSeeder::class,   // إذا كان موجوداً
+            
+            // ✅ الحملات
             CampaignSeeder::class,
+            
+            // ✅ التبرعات
             RandomDonationsSeeder::class,
-     ]);
-        /*User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);*/
+            
+            // ✅ المهام التطوعية (جديد)
+            VolunteerTaskSeeder::class,
+        ]);
     }
 }

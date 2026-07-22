@@ -161,7 +161,8 @@ class DonationCartController extends Controller
         
         foreach ($cartItems as $item) {
             $donation = Donation::create([
-                'user_id' => $user->id,
+                'donor_id' => $user->id,
+               // 'user_id' => $user->id,
                 'campaign_id' => $item->campaign_id,
                 'amount' => $item->amount,
                 'currency' => 'USD',

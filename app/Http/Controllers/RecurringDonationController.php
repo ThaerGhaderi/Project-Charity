@@ -19,6 +19,7 @@ class RecurringDonationController extends Controller
     public function subscribe(RequestsRecurringDonationRequest $request)
     {
         $user = $request->user();
+         $donor = $user->donor;
         $campaign = Campaign::findOrFail($request->campaign_id);
 
         // Check if campaign is active
@@ -34,7 +35,7 @@ class RecurringDonationController extends Controller
 
             // Create initial donation
             $donation = Donation::create([
-                'user_id' => $user->id,
+                'donor_id' => $donor->id,
                 'campaign_id' => $campaign->id,
                 'amount' => $request->amount,
                 'currency' => 'USD',
@@ -61,7 +62,7 @@ class RecurringDonationController extends Controller
             // Create recurring donation record
             $recurring = RecurringDonation::create([
                 'donation_id' => $donation->id,
-                'user_id' => $user->id,
+                'donor_id' => $donor->id,
                 'campaign_id' => $campaign->id,
                 'amount' => $request->amount,
                 'frequency' => $request->frequency,
@@ -99,12 +100,20 @@ class RecurringDonationController extends Controller
     /**
      * Get user's active recurring donations
      */
-    public function index(Request $request)
+   public function index(Request $request)
     {
         $user = $request->user();
+        $donor = $user->donor;
+        
+        if (!$donor) {
+            return response()->json([
+                'success' => false,
+                'message' => 'لم يتم العثور على ملف المتبرع'
+            ], 404);
+        }
         
         $recurringDonations = RecurringDonation::with(['campaign'])
-            ->where('user_id', $user->id)
+            ->where('donor_id', $donor->id)  // ✅ استخدام donor_id
             ->where('is_active', true)
             ->get();
 
@@ -117,11 +126,19 @@ class RecurringDonationController extends Controller
     /**
      * Cancel a recurring donation
      */
-    public function cancel($id, Request $request)
+     public function cancel($id, Request $request)
     {
         $user = $request->user();
+        $donor = $user->donor;
         
-        $recurring = RecurringDonation::where('user_id', $user->id)
+        if (!$donor) {
+            return response()->json([
+                'success' => false,
+                'message' => 'لم يتم العثور على ملف المتبرع'
+            ], 404);
+        }
+        
+        $recurring = RecurringDonation::where('donor_id', $donor->id)  // ✅ استخدام donor_id
             ->where('id', $id)
             ->firstOrFail();
 
@@ -143,12 +160,20 @@ class RecurringDonationController extends Controller
     /**
      * Get recurring donation details
      */
-    public function show($id, Request $request)
+     public function show($id, Request $request)
     {
         $user = $request->user();
+        $donor = $user->donor;
+        
+        if (!$donor) {
+            return response()->json([
+                'success' => false,
+                'message' => 'لم يتم العثور على ملف المتبرع'
+            ], 404);
+        }
         
         $recurring = RecurringDonation::with(['campaign', 'donation'])
-            ->where('user_id', $user->id)
+            ->where('donor_id', $donor->id)  // ✅ استخدام donor_id
             ->where('id', $id)
             ->firstOrFail();
 

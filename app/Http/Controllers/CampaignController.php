@@ -8,8 +8,11 @@ use App\Models\Campaign;
 use App\Models\CampaignUpdate;
 use App\Models\Notification;
 use App\Models\User;
+use App\Models\VolunteerTask;
+use App\Models\VolunterProfile;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 class CampaignController extends Controller
 {
@@ -48,11 +51,11 @@ class CampaignController extends Controller
         $query->orderBy($sortBy, $sortOrder);
 
         // Pagination
-        $perPage = $request->get('per_page', 0);
+        $perPage = $request->get('per_page', 15);
         $campaigns = $query->paginate($perPage);
 
         // Add computed attributes
-       $campaigns->getCollection()->transform(function ($campaign) {
+        $campaigns->getCollection()->transform(function ($campaign) {
             $campaign->progress_percentage = $campaign->progress_percentage;
             $campaign->remaining_amount = $campaign->remaining_amount;
             $campaign->donors_count = $campaign->donors_count;
@@ -129,101 +132,100 @@ class CampaignController extends Controller
     /**
      * Get campaign categories list
      */
-   public function categories()
-{
-    // التصنيفات الأساسية الثابتة (جميع التصنيفات المتاحة في النظام)
-    $allCategories = [
-        'تعليم',
-        'صحي', 
-        'إغاثة',
-        'إيواء',
-        'غذاء',
-        'مياه',
-        'كسوة',
-        'دعم نفسي',
-        'تمكين اقتصادي',
-        'أطفال',
-        'بيئة',
-        'ثقافة',
-        'رياضة',
-        'تكنولوجيا',
-        'تنمية مجتمعية'
-    ];
-    
-    // جلب التصنيفات الموجودة في الحملات (التي استخدمت فعلاً)
-    $categoriesFromCampaigns = Campaign::select('category')
-        ->distinct()
-        ->whereNotNull('category')
-        ->pluck('category')
-        ->toArray();
-    
-    // دمج التصنيفات الثابتة مع الموجودة في الحملات
-    // مع إزالة المكرر وترتيب تصاعدي
-    $mergedCategories = array_unique(array_merge($allCategories, $categoriesFromCampaigns));
-    sort($mergedCategories);
-    
-    return response()->json([
-        'success' => true,
-        'data' => array_values($mergedCategories) // إعادة ترقيم المصفوفة
-    ]);
-}
+    public function categories()
+    {
+        $allCategories = [
+            'تعليم', 'صحي', 'إغاثة', 'إيواء', 'غذاء',
+            'مياه', 'كسوة', 'دعم نفسي', 'تمكين اقتصادي',
+            'أطفال', 'بيئة', 'ثقافة', 'رياضة',
+            'تكنولوجيا', 'تنمية مجتمعية'
+        ];
+        
+        $categoriesFromCampaigns = Campaign::select('category')
+            ->distinct()
+            ->whereNotNull('category')
+            ->pluck('category')
+            ->toArray();
+        
+        $mergedCategories = array_unique(array_merge($allCategories, $categoriesFromCampaigns));
+        sort($mergedCategories);
+        
+        return response()->json([
+            'success' => true,
+            'data' => array_values($mergedCategories)
+        ], 200);
+    }
+
     /**
      * Create a new campaign
      */
-    public function store(Request $request)
-    {
-        // 1. التحقق من أن المستخدم مسجل دخول
-        if (!Auth::check()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'يجب تسجيل الدخول لإنشاء حملة'
-            ], 401);
-        }
-
-        // 2. التحقق من صحة البيانات
-        $validated = $request->validate([
-            'title' => 'required|string|max:255',
-            'description' => 'required|string',
-            'goal_amount' => 'required|numeric|min:1000',
-            'category' => 'nullable|string|max:100',
-            'is_emergency' => 'boolean',
-            'start_date' => 'nullable|date|after_or_equal:today',
-            'end_date' => 'nullable|date|after:start_date',
-        ]);
-
-        // 3. إضافة البيانات الإضافية
-        $validated['collected_amount'] = 0;
-        $validated['status'] = 'draft';
-        $validated['created_by'] = Auth::id();
-        $validated['short_url'] = Str::random(8);
-        
-        // 4. إنشاء الحملة
-        try {
-            $campaign = Campaign::create($validated);
-            
-            // ✅ إرسال إشعار Firebase لمنشئ الحملة
-            Notification::sendPushOnly(
-                Auth::id(),
-                '📢 تم إنشاء حملة جديدة',
-                "تم إنشاء حملة '{$campaign->title}' بنجاح. وهي قيد المراجعة.",
-                'campaign',
-                ['campaign_id' => $campaign->id]
-            );
-            
-            return response()->json([
-                'success' => true,
-                'message' => 'تم إنشاء الحملة بنجاح. وهي قيد المراجعة.',
-                'data' => $campaign
-            ], 201);
-            
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'حدث خطأ أثناء إنشاء الحملة',
-                'error' => $e->getMessage()
-            ], 500);
+   public function store(Request $request)
+{
+    // ✅ حل مشكلة قراءة JSON
+    if (empty($request->all())) {
+        $jsonData = $request->json()->all();
+        if (!empty($jsonData)) {
+            $request->merge($jsonData);
         }
     }
+
+    if (!Auth::check()) {
+        return response()->json([
+            'success' => false,
+            'message' => 'يجب تسجيل الدخول لإنشاء حملة'
+        ], 401);
+    }
+
+    $validated = $request->validate([
+        'title' => 'required|string|max:255',
+        'description' => 'required|string',
+        'goal_amount' => 'required|numeric|min:1000',
+        'category' => 'nullable|string|max:100',
+        'is_emergency' => 'boolean',
+        'start_date' => 'nullable|date|after_or_equal:today',
+        'end_date' => 'nullable|date|after:start_date',
+        'location' => 'nullable|string|max:255',
+        'volunteer_ids' => 'nullable|array',
+        'volunteer_ids.*' => 'exists:volunter_profiles,id',
+    ]);
+
+    $validated['collected_amount'] = 0;
+    $validated['status'] = 'draft';
+    $validated['created_by'] = Auth::id();
+    $validated['short_url'] = Str::random(8);
+    
+    try {
+        $campaign = Campaign::create($validated);
+        
+        Notification::sendPushOnly(
+            Auth::id(),
+            '📢 تم إنشاء حملة جديدة',
+            "تم إنشاء حملة '{$campaign->title}' بنجاح. وهي قيد المراجعة.",
+            'campaign',
+            ['campaign_id' => $campaign->id]
+        );
+        
+        $volunteerIds = $request->volunteer_ids ?? [];
+        $this->createVolunteerTasksForCampaign($campaign, $volunteerIds);
+        
+        // ✅ تحميل المهام المرتبطة
+        $campaign->load('volunteerTasks');
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'تم إنشاء الحملة بنجاح. وهي قيد المراجعة.',
+            'data' => $campaign
+        ], 201);
+        
+    } catch (\Exception $e) {
+        Log::error('Campaign creation failed: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'حدث خطأ أثناء إنشاء الحملة',
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
 
     /**
      * Update campaign status
@@ -296,11 +298,9 @@ class CampaignController extends Controller
 
     /**
      * Send notifications to donors when campaign status changes
-     * ✅ Firebase فقط (بدون حفظ في قاعدة البيانات)
      */
     private function sendStatusChangeNotifications($campaign, $oldStatus, $newStatus)
     {
-        // جلب جميع المتبرعين لهذه الحملة
         $donors = $campaign->donations()
             ->where('status', 'completed')
             ->with('user')
@@ -313,7 +313,6 @@ class CampaignController extends Controller
         
         foreach ($donors as $donor) {
             if ($donor && $donor->id) {
-                // ✅ إرسال إشعار Firebase فقط
                 Notification::sendPushOnly(
                     $donor->id,
                     $title,
@@ -324,7 +323,6 @@ class CampaignController extends Controller
             }
         }
         
-        // إرسال إشعار لمنشئ الحملة
         $creator = User::find($campaign->created_by);
         if ($creator) {
             Notification::sendPushOnly(
@@ -420,5 +418,114 @@ class CampaignController extends Controller
                 'current_status' => $campaign->status
             ]
         ], 200);
+    }
+
+    /**
+     * جلب قائمة المتطوعين المتاحين (API مساعد)
+     */
+    public function getAvailableVolunteers(Request $request)
+    {
+        $volunteers = VolunterProfile::with('user')
+            ->where('status', 'متاح')
+            ->get()
+            ->map(function($volunteer) {
+                return [
+                    'id' => $volunteer->id,
+                    'name' => $volunteer->user->name ?? 'غير معروف',
+                    'email' => $volunteer->user->email ?? 'غير معروف',
+                    'total_hours' => $volunteer->total_hours,
+                    'status' => $volunteer->status,
+                ];
+            });
+
+        return response()->json([
+            'success' => true,
+            'data' => $volunteers
+        ]);
+    }
+
+    /**
+     * إنشاء مهام تطوعية للحملة مع تحديد المتطوعين
+     */
+    private function createVolunteerTasksForCampaign($campaign, $volunteerIds = [])
+    {
+        $admin = User::whereIn('role', ['admin', 'Admin'])->first();
+        $supervisorId = $admin ? $admin->id : 1;
+
+        // ✅ إذا تم تحديد متطوعين، استخدمهم
+        if (!empty($volunteerIds)) {
+            $volunteers = VolunterProfile::whereIn('id', $volunteerIds)->get();
+            
+            // ✅ إذا لم يتم العثور على المتطوعين، استخدم أول متطوع
+            if ($volunteers->isEmpty()) {
+                $volunteers = VolunterProfile::limit(1)->get();
+            }
+        } else {
+            // ✅ إذا لم يتم تحديد متطوعين، استخدم جميع المتطوعين المتاحين
+            $volunteers = VolunterProfile::where('status', 'متاح')->get();
+            
+            // ✅ إذا لم يوجد متطوعين، أنشئ متطوع افتراضي
+            if ($volunteers->isEmpty()) {
+                $user = User::create([
+                    'name' => 'متطوع افتراضي',
+                    'email' => 'volunteer_default_' . time() . '@test.com',
+                    'password' => bcrypt('password123'),
+                    'role' => 'volunteer',
+                    'profile_completed' => true,
+                    'email_verified_at' => now(),
+                ]);
+                
+                $volunteer = VolunterProfile::create([
+                    'user_id' => $user->id,
+                    'Favorite_period' => 'صباحاً',
+                    'Commitment_type' => 'منتظم',
+                    'Educational_level' => 'بكالوريوس',
+                    'status' => 'متاح',
+                    'total_hours' => 0,
+                ]);
+                
+                $volunteers = collect([$volunteer]);
+            }
+        }
+
+        // ✅ تعريف المهام
+        $tasks = [
+            [
+                'title' => "توزيع المساعدات - {$campaign->title}",
+                'description' => "توزيع المساعدات على المستفيدين ضمن حملة {$campaign->title}",
+                'location' => $campaign->location ?? 'غير محدد',
+            ],
+            [
+                'title' => "تنظيم الفعاليات - {$campaign->title}",
+                'description' => "تنظيم فعاليات الحملة واستقبال المتبرعين",
+                'location' => $campaign->location ?? 'غير محدد',
+            ],
+            [
+                'title' => "تسجيل المستفيدين - {$campaign->title}",
+                'description' => "تسجيل بيانات المستفيدين من الحملة",
+                'location' => $campaign->location ?? 'غير محدد',
+            ],
+        ];
+
+        // ✅ توزيع المهام على المتطوعين
+        $volunteerIndex = 0;
+        $volunteerCount = $volunteers->count();
+        
+        foreach ($tasks as $taskData) {
+            $volunteer = $volunteers[$volunteerIndex % $volunteerCount];
+            
+            VolunteerTask::create([
+                'campaign_id' => $campaign->id,
+                'volunteer_id' => $volunteer->id,
+                'title' => $taskData['title'],
+                'description' => $taskData['description'],
+                'location' => $taskData['location'],
+                'status' => 'جديدة',
+                'supervisor_id' => $supervisorId,
+                'expected_end_time' => now()->addDays(7),
+            ]);
+            
+            $volunteerIndex++;
+        }
     }
 }
