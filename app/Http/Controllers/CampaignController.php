@@ -13,11 +13,44 @@ use App\Models\VolunterProfile;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Carbon\Carbon;
 
 class CampaignController extends Controller
 {
     /**
-     * Get all campaigns with filters
+     * دالة مساعدة لتنسيق بيانات الحملة (لتوحيد التواريخ)
+     * ✅ من الملف الثاني
+     */
+    private function formatCampaignData($campaign)
+    {
+        // ✅ حساب achieved_amount و donors_count إذا لم تكن موجودة
+        $achievedAmount = $campaign->achieved_amount ?? $campaign->donations()->where('status', 'completed')->sum('amount');
+        $donorsCount = $campaign->donors_count ?? $campaign->donations()->where('status', 'completed')->distinct('donor_id')->count('donor_id');
+        $progressPercentage = $campaign->goal_amount > 0 ? round(($achievedAmount / $campaign->goal_amount) * 100, 2) : 0;
+
+        return [
+            'id' => $campaign->id,
+            'title' => $campaign->title,
+            'description' => $campaign->description,
+            'goal_amount' => $campaign->goal_amount,
+            'collected_amount' => $campaign->collected_amount,
+            'category' => $campaign->category,
+            'status' => $campaign->status,
+            'is_emergency' => $campaign->is_emergency,
+            'start_date' => $campaign->start_date ? Carbon::parse($campaign->start_date)->format('Y-m-d') : null,
+            'end_date' => $campaign->end_date ? Carbon::parse($campaign->end_date)->format('Y-m-d') : null,
+            'short_url' => $campaign->short_url,
+            'qr_code_url' => $campaign->qr_code_url,
+            'achieved_amount' => $achievedAmount,
+            'donors_count' => $donorsCount,
+            'progress_percentage' => $progressPercentage,
+            'created_at' => $campaign->created_at ? $campaign->created_at->format('Y-m-d') : null,
+            'updated_at' => $campaign->updated_at ? $campaign->updated_at->format('Y-m-d') : null,
+        ];
+    }
+
+    /**
+     * ✅ من الملف الأول: Get all campaigns with filters (مع Pagination)
      */
     public function index(Request $request)
     {
@@ -69,7 +102,39 @@ class CampaignController extends Controller
     }
 
     /**
-     * Get featured campaigns (for homepage)
+     * ✅ من الملف الثاني: Get all campaigns (بدون Pagination)
+     */
+    public function getAll(Request $request)
+    {
+        $query = Campaign::query()
+            ->withSum(['donations as achieved_amount' => function ($q) {
+                $q->where('status', 'completed');
+            }], 'amount')
+            ->withCount(['donations as donors_count' => function ($q) {
+                $q->where('status', 'completed');
+            }]);
+
+        if ($request->has('category')) {
+            $query->where('category', $request->category);
+        }
+
+        if ($request->has('status')) {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->has('is_emergency')) {
+            $query->where('is_emergency', $request->boolean('is_emergency'));
+        }
+
+        $campaigns = $query->latest()->get()->map(function ($campaign) {
+            return $this->formatCampaignData($campaign);
+        });
+
+        return response()->json($campaigns);
+    }
+
+    /**
+     * ✅ من الملف الأول: Get featured campaigns (for homepage)
      */
     public function featured(Request $request)
     {
@@ -93,7 +158,7 @@ class CampaignController extends Controller
     }
 
     /**
-     * Get single campaign details
+     * ✅ من الملف الأول: Get single campaign details
      */
     public function show($id)
     {
@@ -112,7 +177,29 @@ class CampaignController extends Controller
     }
 
     /**
-     * Get campaign updates
+     * ✅ من الملف الثاني: Show campaign with formatted data
+     */
+    public function showCampaign($id)
+    {
+        $campaign = Campaign::withSum(['donations as achieved_amount' => function ($q) {
+                $q->where('status', 'completed');
+            }], 'amount')
+            ->withCount(['donations as donors_count' => function ($q) {
+                $q->where('status', 'completed');
+            }])
+            ->find($id);
+
+        if (!$campaign) {
+            return response()->json([
+                'message' => 'الحملة غير موجودة'
+            ], 404);
+        }
+
+        return response()->json($this->formatCampaignData($campaign));
+    }
+
+    /**
+     * ✅ من الملف الأول: Get campaign updates
      */
     public function updates($id)
     {
@@ -130,7 +217,7 @@ class CampaignController extends Controller
     }
 
     /**
-     * Get campaign categories list
+     * ✅ من الملف الأول: Get campaign categories list
      */
     public function categories()
     {
@@ -157,78 +244,106 @@ class CampaignController extends Controller
     }
 
     /**
-     * Create a new campaign
+     * ✅ من الملف الأول: Create a new campaign (مع volunteer_ids)
      */
-   public function store(Request $request)
-{
-    // ✅ حل مشكلة قراءة JSON
-    if (empty($request->all())) {
-        $jsonData = $request->json()->all();
-        if (!empty($jsonData)) {
-            $request->merge($jsonData);
+    public function store(Request $request)
+    {
+        // حل مشكلة قراءة JSON
+        if (empty($request->all())) {
+            $jsonData = $request->json()->all();
+            if (!empty($jsonData)) {
+                $request->merge($jsonData);
+            }
+        }
+
+        if (!Auth::check()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'يجب تسجيل الدخول لإنشاء حملة'
+            ], 401);
+        }
+
+        $validated = $request->validate([
+            'title' => 'required|string|max:255',
+            'description' => 'required|string',
+            'goal_amount' => 'required|numeric|min:1000',
+            'category' => 'nullable|string|max:100',
+            'is_emergency' => 'boolean',
+            'start_date' => 'nullable|date|after_or_equal:today',
+            'end_date' => 'nullable|date|after:start_date',
+            'location' => 'nullable|string|max:255',
+            'volunteer_ids' => 'nullable|array',
+            'volunteer_ids.*' => 'exists:volunter_profiles,id',
+        ]);
+
+        $validated['collected_amount'] = 0;
+        $validated['status'] = 'draft';
+        $validated['created_by'] = Auth::id();
+        $validated['short_url'] = Str::random(8);
+        
+        try {
+            $campaign = Campaign::create($validated);
+            
+            Notification::sendPushOnly(
+                Auth::id(),
+                '📢 تم إنشاء حملة جديدة',
+                "تم إنشاء حملة '{$campaign->title}' بنجاح. وهي قيد المراجعة.",
+                'campaign',
+                ['campaign_id' => $campaign->id]
+            );
+            
+            $volunteerIds = $request->volunteer_ids ?? [];
+            $this->createVolunteerTasksForCampaign($campaign, $volunteerIds);
+            
+            $campaign->load('volunteerTasks');
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'تم إنشاء الحملة بنجاح. وهي قيد المراجعة.',
+                'data' => $campaign
+            ], 201);
+            
+        } catch (\Exception $e) {
+            Log::error('Campaign creation failed: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'حدث خطأ أثناء إنشاء الحملة',
+                'error' => $e->getMessage()
+            ], 500);
         }
     }
 
-    if (!Auth::check()) {
-        return response()->json([
-            'success' => false,
-            'message' => 'يجب تسجيل الدخول لإنشاء حملة'
-        ], 401);
-    }
+    /**
+     * ✅ من الملف الثاني: Update campaign
+     */
+    public function update(Request $request, $id)
+    {
+        $campaign = Campaign::find($id);
 
-    $validated = $request->validate([
-        'title' => 'required|string|max:255',
-        'description' => 'required|string',
-        'goal_amount' => 'required|numeric|min:1000',
-        'category' => 'nullable|string|max:100',
-        'is_emergency' => 'boolean',
-        'start_date' => 'nullable|date|after_or_equal:today',
-        'end_date' => 'nullable|date|after:start_date',
-        'location' => 'nullable|string|max:255',
-        'volunteer_ids' => 'nullable|array',
-        'volunteer_ids.*' => 'exists:volunter_profiles,id',
-    ]);
+        if (!$campaign) {
+            return response()->json([
+                'message' => 'الحملة غير موجودة'
+            ], 404);
+        }
 
-    $validated['collected_amount'] = 0;
-    $validated['status'] = 'draft';
-    $validated['created_by'] = Auth::id();
-    $validated['short_url'] = Str::random(8);
-    
-    try {
-        $campaign = Campaign::create($validated);
-        
-        Notification::sendPushOnly(
-            Auth::id(),
-            '📢 تم إنشاء حملة جديدة',
-            "تم إنشاء حملة '{$campaign->title}' بنجاح. وهي قيد المراجعة.",
-            'campaign',
-            ['campaign_id' => $campaign->id]
-        );
-        
-        $volunteerIds = $request->volunteer_ids ?? [];
-        $this->createVolunteerTasksForCampaign($campaign, $volunteerIds);
-        
-        // ✅ تحميل المهام المرتبطة
-        $campaign->load('volunteerTasks');
-        
-        return response()->json([
-            'success' => true,
-            'message' => 'تم إنشاء الحملة بنجاح. وهي قيد المراجعة.',
-            'data' => $campaign
-        ], 201);
-        
-    } catch (\Exception $e) {
-        Log::error('Campaign creation failed: ' . $e->getMessage());
-        return response()->json([
-            'success' => false,
-            'message' => 'حدث خطأ أثناء إنشاء الحملة',
-            'error' => $e->getMessage()
-        ], 500);
+        $validated = $request->validate([
+            'title' => 'sometimes|string|max:255',
+            'description' => 'sometimes|string',
+            'goal_amount' => 'sometimes|numeric|min:1000',
+            'category' => 'nullable|string|max:100',
+            'is_emergency' => 'boolean',
+            'start_date' => 'nullable|date|after_or_equal:today',
+            'end_date' => 'nullable|date|after:start_date',
+            'location' => 'nullable|string|max:255',
+        ]);
+
+        $campaign->update($validated);
+
+        return response()->json($this->formatCampaignData($campaign->fresh()));
     }
-}
 
     /**
-     * Update campaign status
+     * ✅ من الملف الأول: Update campaign status
      */
     public function updateStatus(Request $request, $id)
     {
@@ -282,7 +397,6 @@ class CampaignController extends Controller
         
         $campaign->save();
 
-        // ✅ إرسال إشعارات Firebase للمتبرعين
         $this->sendStatusChangeNotifications($campaign, $oldStatus, $newStatus);
 
         return response()->json([
@@ -297,7 +411,62 @@ class CampaignController extends Controller
     }
 
     /**
-     * Send notifications to donors when campaign status changes
+     * ✅ من الملف الثاني: Delete campaign
+     */
+    public function destroy($id)
+    {
+        $campaign = Campaign::find($id);
+        if (!$campaign) {
+            return response()->json([
+                'message' => 'الحملة غير موجودة'
+            ], 404);
+        }
+
+        $campaign->delete();
+
+        return response()->json([
+            'message' => 'تم حذف الحملة بنجاح'
+        ]);
+    }
+
+    /**
+     * ✅ من الملف الأول: Check and update campaign status automatically
+     */
+    public function checkAndUpdateStatus($id)
+    {
+        $campaign = Campaign::findOrFail($id);
+        
+        $oldStatus = $campaign->status;
+        $autoUpdated = false;
+        
+        if ($campaign->status === 'active' && $campaign->collected_amount >= $campaign->goal_amount) {
+            $campaign->status = 'completed';
+            $campaign->save();
+            $autoUpdated = true;
+            $this->sendStatusChangeNotifications($campaign, $oldStatus, 'completed');
+        }
+        
+        if ($campaign->status === 'active' && $campaign->end_date && $campaign->end_date < now()) {
+            $campaign->status = 'closed';
+            $campaign->save();
+            $autoUpdated = true;
+            $this->sendStatusChangeNotifications($campaign, $oldStatus, 'closed');
+        }
+        
+        return response()->json([
+            'success' => true,
+            'message' => $autoUpdated ? 'تم تحديث حالة الحملة تلقائياً' : 'الحالة كما هي',
+            'data' => [
+                'campaign' => $campaign,
+                'was_updated' => $autoUpdated,
+                'old_status' => $oldStatus,
+                'current_status' => $campaign->status
+            ]
+        ], 200);
+    }
+
+    /**
+     * ✅ من الملف الأول: Send notifications to donors when campaign status changes
      */
     private function sendStatusChangeNotifications($campaign, $oldStatus, $newStatus)
     {
@@ -336,22 +505,22 @@ class CampaignController extends Controller
     }
 
     /**
-     * Get notification title based on status
+     * ✅ من الملف الأول: Get notification title based on status
      */
     private function getNotificationTitle($campaignTitle, $status)
     {
         return match ($status) {
-            'active' => "🚀 حملة {$campaignTitle} أصبحت نشطة",
-            'completed' => "🎉 حملة {$campaignTitle} حققت هدفها!",
-            'cancelled' => "⛔ حملة {$campaignTitle} تم إلغاؤها",
-            'closed' => "🔒 حملة {$campaignTitle} تم إغلاقها",
-            'review' => "📝 حملة {$campaignTitle} قيد المراجعة",
-            default => "📢 تحديث حالة حملة {$campaignTitle}"
+            'active' => " حملة {$campaignTitle} أصبحت نشطة",
+            'completed' => " حملة {$campaignTitle} حققت هدفها!",
+            'cancelled' => " حملة {$campaignTitle} تم إلغاؤها",
+            'closed' => " حملة {$campaignTitle} تم إغلاقها",
+            'review' => " حملة {$campaignTitle} قيد المراجعة",
+            default => " تحديث حالة حملة {$campaignTitle}"
         };
     }
 
     /**
-     * Get notification body based on status change
+     * ✅ من الملف الأول: Get notification body based on status change
      */
     private function getNotificationBody($campaign, $oldStatus, $newStatus)
     {
@@ -369,7 +538,7 @@ class CampaignController extends Controller
     }
 
     /**
-     * Get success message for status change
+     * ✅ من الملف الأول: Get success message for status change
      */
     private function getStatusChangeMessage($status)
     {
@@ -385,43 +554,7 @@ class CampaignController extends Controller
     }
 
     /**
-     * Check and update campaign status automatically
-     */
-    public function checkAndUpdateStatus($id)
-    {
-        $campaign = Campaign::findOrFail($id);
-        
-        $oldStatus = $campaign->status;
-        $autoUpdated = false;
-        
-        if ($campaign->status === 'active' && $campaign->collected_amount >= $campaign->goal_amount) {
-            $campaign->status = 'completed';
-            $campaign->save();
-            $autoUpdated = true;
-            $this->sendStatusChangeNotifications($campaign, $oldStatus, 'completed');
-        }
-        
-        if ($campaign->status === 'active' && $campaign->end_date && $campaign->end_date < now()) {
-            $campaign->status = 'closed';
-            $campaign->save();
-            $autoUpdated = true;
-            $this->sendStatusChangeNotifications($campaign, $oldStatus, 'closed');
-        }
-        
-        return response()->json([
-            'success' => true,
-            'message' => $autoUpdated ? 'تم تحديث حالة الحملة تلقائياً' : 'الحالة كما هي',
-            'data' => [
-                'campaign' => $campaign,
-                'was_updated' => $autoUpdated,
-                'old_status' => $oldStatus,
-                'current_status' => $campaign->status
-            ]
-        ], 200);
-    }
-
-    /**
-     * جلب قائمة المتطوعين المتاحين (API مساعد)
+     * ✅ من الملف الأول: Get available volunteers (API helper)
      */
     public function getAvailableVolunteers(Request $request)
     {
@@ -445,26 +578,22 @@ class CampaignController extends Controller
     }
 
     /**
-     * إنشاء مهام تطوعية للحملة مع تحديد المتطوعين
+     * ✅ من الملف الأول: Create volunteer tasks for campaign
      */
     private function createVolunteerTasksForCampaign($campaign, $volunteerIds = [])
     {
         $admin = User::whereIn('role', ['admin', 'Admin'])->first();
         $supervisorId = $admin ? $admin->id : 1;
 
-        // ✅ إذا تم تحديد متطوعين، استخدمهم
         if (!empty($volunteerIds)) {
             $volunteers = VolunterProfile::whereIn('id', $volunteerIds)->get();
             
-            // ✅ إذا لم يتم العثور على المتطوعين، استخدم أول متطوع
             if ($volunteers->isEmpty()) {
                 $volunteers = VolunterProfile::limit(1)->get();
             }
         } else {
-            // ✅ إذا لم يتم تحديد متطوعين، استخدم جميع المتطوعين المتاحين
             $volunteers = VolunterProfile::where('status', 'متاح')->get();
             
-            // ✅ إذا لم يوجد متطوعين، أنشئ متطوع افتراضي
             if ($volunteers->isEmpty()) {
                 $user = User::create([
                     'name' => 'متطوع افتراضي',
@@ -488,7 +617,6 @@ class CampaignController extends Controller
             }
         }
 
-        // ✅ تعريف المهام
         $tasks = [
             [
                 'title' => "توزيع المساعدات - {$campaign->title}",
@@ -507,7 +635,6 @@ class CampaignController extends Controller
             ],
         ];
 
-        // ✅ توزيع المهام على المتطوعين
         $volunteerIndex = 0;
         $volunteerCount = $volunteers->count();
         

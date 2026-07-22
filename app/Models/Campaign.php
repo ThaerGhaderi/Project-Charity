@@ -1,6 +1,5 @@
 <?php
 
-
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
@@ -22,6 +21,7 @@ class Campaign extends Model
         'created_by'
     ];
 
+   
     protected $casts = [
         'goal_amount' => 'decimal:2',
         'collected_amount' => 'decimal:2',
@@ -30,67 +30,100 @@ class Campaign extends Model
         'end_date' => 'date',
     ];
 
-    // Relationships
+  
+    protected $appends = ['achieved_amount', 'donors_count', 'progress_percentage'];
+
+   
     public function creator()
     {
         return $this->belongsTo(User::class, 'created_by');
     }
 
+  
     public function donations()
     {
-        return $this->hasMany(Donation::class);
+        return $this->hasMany(Donation::class, 'campaign_id');
     }
 
+  
     public function media()
     {
         return $this->hasMany(CampaignMedia::class);
     }
 
+  
     public function updates()
     {
         return $this->hasMany(CampaignUpdate::class);
     }
 
+   
     public function beneficiaryProjects()
     {
         return $this->hasMany(BeneficiaryProject::class);
     }
 
-    // Scopes
+   
+    public function donorProfiles()
+    {
+        return $this->belongsToMany(DonorProfile::class, 'donations', 'campaign_id', 'donor_id')->distinct();
+    }
+
+   
+    public function volunteerTasks()
+    {
+        return $this->hasMany(VolunteerTask::class);
+    }
+
+    
     public function scopeActive($query)
     {
         return $query->where('status', 'active');
     }
 
+    
     public function scopeEmergency($query)
     {
         return $query->where('is_emergency', true);
     }
 
+  
     public function scopeByCategory($query, $category)
     {
         return $query->where('category', $category);
     }
 
-    // Helper methods
+  
     public function getProgressPercentageAttribute()
     {
-        if ($this->goal_amount == 0) return 0;
-        return min(100, round(($this->collected_amount / $this->goal_amount) * 100));
+        if (!$this->goal_amount || $this->goal_amount == 0) {
+            return 0;
+        }
+       
+        return round(($this->achieved_amount / $this->goal_amount) * 100, 2);
     }
 
+   
     public function getRemainingAmountAttribute()
     {
         return max(0, $this->goal_amount - $this->collected_amount);
     }
 
-   public function getDonorsCountAttribute()
-{
-    return $this->donations()
-        ->where('status', 'completed')
-        ->distinct('donor_id')  // ✅ تغيير إلى donor_id
-        ->count('donor_id');     // ✅ تغيير إلى donor_id
-}
+   
+    public function getAchievedAmountAttribute()
+    {
+        return $this->attributes['achieved_amount_sum']
+            ?? $this->donations()->where('status', 'completed')->sum('amount');
+    }
+
+   
+    public function getDonorsCountAttribute()
+    {
+        return $this->attributes['donors_count_calc']
+            ?? $this->donations()->where('status', 'completed')->distinct('donor_id')->count('donor_id');
+    }
+
+   
     public function updateCollectedAmount()
     {
         $this->collected_amount = $this->donations()
@@ -98,7 +131,7 @@ class Campaign extends Model
             ->sum('amount');
         $this->save();
         
-        // Auto close if goal reached
+      
         if ($this->collected_amount >= $this->goal_amount && $this->status === 'active') {
             $this->status = 'completed';
             $this->save();
@@ -106,9 +139,4 @@ class Campaign extends Model
         
         return $this;
     }
-      public function volunteerTasks()
-    {
-        return $this->hasMany(VolunteerTask::class);
-    }
-
 }

@@ -2,16 +2,25 @@
 
 namespace App\Http\Requests;
 
+use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
 class DonationRequest extends FormRequest
 {
-    public function authorize()
+    /**
+     * Determine if the user is authorized to make this request.
+     */
+    public function authorize(): bool
     {
         return true;
     }
 
-    public function rules()
+    /**
+     * Get the validation rules that apply to the request.
+     *
+     * @return array<string, ValidationRule|array<mixed>|string>
+     */
+    public function rules(): array
     {
         return [
             'donor_id' => 'nullable|exists:donor_profiles,id',
@@ -27,7 +36,12 @@ class DonationRequest extends FormRequest
         ];
     }
 
-    public function messages()
+    /**
+     * Get the validation messages that apply to the request.
+     *
+     * @return array<string, string>
+     */
+    public function messages(): array
     {
         return [
             'campaign_id.required' => 'يرجى اختيار الحملة',

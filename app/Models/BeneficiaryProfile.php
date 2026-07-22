@@ -16,6 +16,12 @@ class BeneficiaryProfile extends Model
     'is_Anonymous',
     'family_members_count',
     'marital_status',
+    'status',
+     'notes',
+     'city',    
+     'phone',    
+     'need',    
+     'priority',
     ];
 
     protected $casts = [

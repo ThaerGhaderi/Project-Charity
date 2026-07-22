@@ -14,8 +14,9 @@ return new class extends Migration
             $table->text('description');
             $table->decimal('goal_amount', 12, 2);
             $table->decimal('collected_amount', 12, 2)->default(0);
-            $table->string('category')->nullable();
+            $table->enum('category', ['إطعام', 'مساجد', 'تعليم', 'صحة', 'مياه', 'أيتام'])->nullable();
             $table->enum('status', ['draft', 'review', 'active', 'closed', 'completed', 'cancelled'])->default('draft');
+          // $table->enum('status', ['متوقفة','نشطة', 'مغلقة', 'مكتملة', 'ملغية'])->default('نشطة');
             $table->boolean('is_emergency')->default(false);
             $table->date('start_date')->nullable();
             $table->date('end_date')->nullable();

@@ -9,6 +9,7 @@ class DonorProfile extends Model
     protected $table = 'donor_profiles';
     
     protected $fillable = [
+         'name',
         'user_id',
         'donor_type',
         'is_anonymous',
@@ -64,5 +65,9 @@ class DonorProfile extends Model
         $this->save();
         $this->addPoints((int)$amount);
         return $this;
+    }
+     public function dorations()
+    {
+        return $this->hasMany(Doration::class,'donor_profile_id');
     }
 }

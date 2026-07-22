@@ -23,6 +23,13 @@ return new class extends Migration
             $table->string('photo_Supporting')->nullable();
             $table->enum('marital_status',['أعزب','متزوج', 'مطلق', 'أرمل','يتيم']);
             $table->boolean('is_Anonymous')->default(0);
+             $table->enum('status',['قيد المراجعة','مقبول','مرفوض'])->default('قيد المراجعة')->nullable();
+            $table->string('notes')->nullable();
+
+              $table->string('city')->nullable();
+            $table->string('phone')->nullable();
+            $table->string('need')->nullable();
+            $table->string('priority')->default('عادي')->nullable();
             $table->timestamps();
         });
     }
