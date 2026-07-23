@@ -22,7 +22,8 @@ return new class extends Migration
             $table->date('end_date')->nullable();
             $table->string('short_url')->nullable();
             $table->string('qr_code_url')->nullable();
-            $table->foreignId('created_by')->constrained('users')->onDelete('cascade');
+            $table->foreignId('created_by')->constrained('users')->onDelete('cascade')->nullable();
+       //  $table->foreignId('created_by')->nullable()->change();
             $table->timestamps();
         });
     }

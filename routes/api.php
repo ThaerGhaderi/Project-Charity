@@ -28,11 +28,8 @@ use App\Http\Controllers\VolunterProfileController as ControllersVolunterProfile
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 
-/*
-|--------------------------------------------------------------------------
-| 1. مسارات المستخدمين العاديين (المستفيد، المتبرع، المتطوع) مع الـ OTP
-|--------------------------------------------------------------------------
-*/
+
+
 Route::prefix('auth')->group(function () {
     // PUBLIC ROUTES
     Route::post('/register', [UserController::class, 'register']);
@@ -41,7 +38,7 @@ Route::prefix('auth')->group(function () {
     Route::post('/reset-password', [UserController::class, 'resetPassword']);
     Route::post('/resend-otp', [UserController::class, 'resendOtp']);
 
-    // PROTECTED ROUTES
+    
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('/verify-otp', [UserController::class, 'verifyOtp']);
         Route::post('/select-role', [UserController::class, 'selectRole']);
@@ -50,24 +47,15 @@ Route::prefix('auth')->group(function () {
     });
 });
 
-/*
-|--------------------------------------------------------------------------
-| 2. مسارات لوحة تحكم الجمعية (الموظفين والمشاهدين) - دخول مباشر بدون تعقيد
-|--------------------------------------------------------------------------
-*/
-// مسار تسجيل الدخول بالاسم الكامل والباسوورد (مطابق تماماً لـ رياكت)
+
 Route::post('/auth/dashboard/login', [EmployeeController::class, 'login']);
 
 Route::middleware('auth:sanctum')->group(function () {
-    // 2. مسار تسجيل الخروج
+   
     Route::post('/auth/dashboard/logout', [EmployeeController::class, 'logout']);
 });
 
-/*
-|--------------------------------------------------------------------------
-| 3. مسارات استكمال البيانات المحمية بـ Sanctum (لكل الفئات)
-|--------------------------------------------------------------------------
-*/
+
 Route::middleware('auth:sanctum')->group(function () {
 
     // ==================== BENEFICIARY ROUTES ====================

@@ -14,6 +14,7 @@
         "laravel/sanctum": "^4.0",
         "laravel/socialite": "^5.27",
         "laravel/tinker": "^2.10.1",
+        "maatwebsite/excel": "*",
         "mpdf/mpdf": "*",
         "payerurl/binance-and-crypto-checkout": "^1.0",
         "pusher/pusher-php-server": "^7.2",
@@ -88,7 +89,8 @@
         "allow-plugins": {
             "pestphp/pest-plugin": true,
             "php-http/discovery": true
-        }
+        },
+        "process-timeout": 2000
     },
     "minimum-stability": "stable",
     "prefer-stable": true
