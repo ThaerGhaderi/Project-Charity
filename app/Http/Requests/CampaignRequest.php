@@ -26,6 +26,7 @@ class CampaignRequest extends FormRequest
         'is_emergency' => 'sometimes|boolean',
         'start_date'   => 'sometimes|date',
         'end_date'     => 'sometimes|date|after:start_date',
+        
         ];
     }
 }

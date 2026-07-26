@@ -11,7 +11,7 @@ return new class extends Migration
     {
         Schema::create('volunteer_tasks', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('volunteer_id')->constrained('volunter_profiles')->onDelete('cascade');
+            $table->foreignId('volunteer_id')->nullable()->constrained('volunter_profiles')->onDelete('cascade');
             $table->foreignId('supervisor_id')->nullable()->constrained('users')->onDelete('set null');
               $table->foreignId('campaign_id')->nullable()->constrained('campaigns')->onDelete('set null');
             // ✅ تكامل مع المستفيد فقط (بدون حملات أو تبرعات)

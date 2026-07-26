@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Support\Str;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\CampaignRequest;
 use App\Models\Campaign;
 use App\Models\CampaignUpdate;
 use App\Models\Notification;
@@ -14,6 +15,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 
 class CampaignController extends Controller
 {
@@ -246,7 +248,7 @@ class CampaignController extends Controller
     /**
      * ✅ من الملف الأول: Create a new campaign (مع volunteer_ids)
      */
-    public function store(Request $request)
+  /*  public function store(Request $request)
     {
         // حل مشكلة قراءة JSON
         if (empty($request->all())) {
@@ -311,6 +313,19 @@ class CampaignController extends Controller
                 'error' => $e->getMessage()
             ], 500);
         }
+    }*/
+
+
+
+          public function store(CampaignRequest $request): JsonResponse
+    {
+         $campaign = Campaign::create($request->validated());
+         // 👈 ضفنا قيم افتراضية عشان الرياكت ما يخبط
+         $campaign->achieved_amount = 0;
+         $campaign->donors_count = 0;
+         $campaign->progress_percentage = 0;
+
+         return response()->json($this->formatCampaignData($campaign), 201);
     }
 
     /**
@@ -335,6 +350,7 @@ class CampaignController extends Controller
             'start_date' => 'nullable|date|after_or_equal:today',
             'end_date' => 'nullable|date|after:start_date',
             'location' => 'nullable|string|max:255',
+           
         ]);
 
         $campaign->update($validated);

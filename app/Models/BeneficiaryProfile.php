@@ -27,7 +27,7 @@ class BeneficiaryProfile extends Model
     protected $casts = [
         'Breadwinner' => 'boolean',
         'has_income'  => 'boolean',
-        'is_ananyomus' => 'boolean',
+        'is_Anonymous' => 'boolean',
     ];
 
     public function user()
@@ -44,4 +44,3 @@ class BeneficiaryProfile extends Model
     return $this->hasMany(AidApplication::class, 'beneficiary_profile_id');
 }
 }
-

@@ -11,13 +11,16 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('employees', function (Blueprint $table) {
-            $table->id();
-            $table->string('full_name');
-            $table->string('password');
-            $table->enum('role',['موظف','مشاهد','محاسب','مدير']);
-            $table->timestamps();
-        });
+        // التحقق من وجود الجدول قبل إنشائه
+        if (!Schema::hasTable('employees')) {
+            Schema::create('employees', function (Blueprint $table) {
+                $table->id();
+                $table->string('full_name');
+                $table->string('password');
+                $table->enum('role', ['موظف', 'مشاهد', 'محاسب', 'مدير']);
+                $table->timestamps();
+            });
+        }
     }
 
     /**

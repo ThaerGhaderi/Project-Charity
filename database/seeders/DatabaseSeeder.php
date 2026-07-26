@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
             SkillSeeder::class,
             CategorySeeder::class,
             TypeSeeder::class,
+             EmployeeSeeder::class,
             
             // ✅ المستخدمين
             DonorSeeder::class,

@@ -17,9 +17,9 @@ use Illuminate\Support\Facades\DB;
 class VolunteerTaskController extends Controller
 {
     /**
-     * عرض جميع مهام المتطوع (الخاصة + المفتوحة للجميع)
+     * عرض جميع مهام المتطوع (الخاصة به فقط)
      * 
-     * @api {get} /api/volunteer/tasks Get All Tasks
+     * @api {get} /api/volunteer/tasks Get My Tasks
      * @apiHeader Authorization Bearer {token}
      */
     public function index(Request $request)
@@ -35,7 +35,7 @@ class VolunteerTaskController extends Controller
             ], 404);
         }
 
-        // ✅ عرض المهام الخاصة بالمستخدم
+        // ✅ عرض المهام الخاصة بالمستخدم فقط
         $query = VolunteerTask::where('volunteer_id', $volunteer->id)
             ->with(['supervisor', 'beneficiary', 'aidApplication', 'visit', 'campaign']);
 
@@ -98,6 +98,19 @@ class VolunteerTaskController extends Controller
                 $task->campaign_title = $task->campaign->title;
                 $task->campaign_progress = $task->campaign->progress_percentage;
             }
+
+            // ✅ معلومات طلب المساعدة
+            if ($task->aidApplication) {
+                $task->aid_type = $task->aidApplication->type;
+                $task->aid_status = $task->aidApplication->status;
+                $task->aid_is_urgent = $task->aidApplication->is_urgent;
+            }
+            
+            // ✅ معلومات الزيارة
+            if ($task->visit) {
+                $task->visit_date = $task->visit->formatted_date;
+                $task->visit_time = $task->visit->formatted_time;
+            }
             
             return $task;
         });
@@ -132,6 +145,132 @@ class VolunteerTaskController extends Controller
     }
 
     /**
+     * ✅ عرض المهام المفتوحة للجميع (بدون متطوع محدد)
+     * 
+     * @api {get} /api/volunteer/tasks/available Get Available Tasks
+     * @apiHeader Authorization Bearer {token}
+     */
+    public function availableTasks(Request $request)
+    {
+        $user = $request->user();
+        $volunteer = $user->volunteer;
+
+        if (!$volunteer) {
+            return response()->json([
+                'code' => '404',
+                'success' => false,
+                'message' => 'لم يتم العثور على ملف المتطوع',
+            ], 404);
+        }
+
+        // ✅ المهام المفتوحة (بدون متطوع)
+        $query = VolunteerTask::whereNull('volunteer_id')
+            ->where('status', 'جديدة')
+            ->with(['supervisor', 'beneficiary', 'visit', 'campaign', 'aidApplication']);
+
+        // تصفية حسب المصدر
+        if ($request->filled('source')) {
+            switch ($request->source) {
+                case 'visit':
+                    $query->whereNotNull('visit_id');
+                    break;
+                case 'campaign':
+                    $query->whereNotNull('campaign_id');
+                    break;
+                case 'beneficiary':
+                    $query->whereNotNull('beneficiary_id');
+                    break;
+                case 'aid':
+                    $query->whereNotNull('aid_application_id');
+                    break;
+            }
+        }
+
+        // ✅ تصفية حسب نوع المهمة
+        if ($request->filled('type')) {
+            switch ($request->type) {
+                case 'visit':
+                    $query->whereNotNull('visit_id');
+                    break;
+                case 'aid':
+                    $query->whereNotNull('aid_application_id');
+                    break;
+                case 'campaign':
+                    $query->whereNotNull('campaign_id');
+                    break;
+            }
+        }
+
+        // تصفية حسب الموقع
+        if ($request->filled('location')) {
+            $query->where('location', 'like', '%' . $request->location . '%');
+        }
+
+        // تصفية حسب الطلبات العاجلة
+        if ($request->boolean('urgent_only')) {
+            $query->whereHas('aidApplication', function($q) {
+                $q->where('is_urgent', true);
+            });
+        }
+
+        // ترتيب حسب الأحدث
+        $sortBy = $request->get('sort_by', 'created_at');
+        $sortOrder = $request->get('sort_order', 'desc');
+        $query->orderBy($sortBy, $sortOrder);
+
+        $tasks = $query->get();
+
+        // إضافة خصائص إضافية
+        $tasks->transform(function ($task) {
+            $task->status_text = $task->status_text;
+            $task->source_type = $task->source_type;
+            $task->source_name = $task->source_name;
+            $task->beneficiary_name = $task->beneficiary_name;
+            $task->is_available = true;
+            
+            if ($task->visit) {
+                $task->visit_date = $task->visit->formatted_date;
+                $task->visit_time = $task->visit->formatted_time;
+            }
+
+            // ✅ معلومات طلب المساعدة
+            if ($task->aidApplication) {
+                $task->aid_type = $task->aidApplication->type;
+                $task->aid_status = $task->aidApplication->status;
+                $task->aid_is_urgent = $task->aidApplication->is_urgent;
+                $task->aid_amount = $task->aidApplication->amount_requested;
+            }
+            
+            return $task;
+        });
+
+        // ✅ إحصائيات المهام المتاحة
+        $stats = [
+            'total' => $tasks->count(),
+            'from_visits' => $tasks->whereNotNull('visit_id')->count(),
+            'from_aid_applications' => $tasks->whereNotNull('aid_application_id')->count(),
+            'from_campaigns' => $tasks->whereNotNull('campaign_id')->count(),
+            'urgent' => $tasks->filter(function($task) {
+                return $task->aidApplication && $task->aidApplication->is_urgent;
+            })->count(),
+        ];
+
+        return response()->json([
+            'code' => '200',
+            'success' => true,
+            'message' => 'تم جلب المهام المتاحة بنجاح',
+            'data' => [
+                'tasks' => $tasks,
+                'stats' => $stats,
+                'volunteer' => [
+                    'id' => $volunteer->id,
+                    'name' => $user->name,
+                ]
+            ]
+        ], 200);
+    }
+
+    /**
      * عرض تفاصيل مهمة معينة
      * 
      * @api {get} /api/volunteer/tasks/{id} Get Task Details
@@ -150,10 +289,19 @@ class VolunteerTaskController extends Controller
             ], 404);
         }
 
-        $task = VolunteerTask::where('volunteer_id', $volunteer->id)
-            ->where('id', $id)
+        // ✅ البحث عن المهمة (بدون شرط volunteer_id للسماح برؤية المهام المفتوحة)
+        $task = VolunteerTask::where('id', $id)
             ->with(['supervisor', 'checkIns', 'beneficiary', 'aidApplication', 'visit', 'campaign'])
             ->firstOrFail();
+
+        // ✅ التحقق من أن المتطوع لديه صلاحية (مهمته أو مفتوحة)
+        if ($task->volunteer_id && $task->volunteer_id != $volunteer->id) {
+            return response()->json([
+                'code' => '403',
+                'success' => false,
+                'message' => 'ليس لديك صلاحية لعرض هذه المهمة',
+            ], 403);
+        }
 
         $task->status_text = $task->status_text;
         $task->elapsed_time = $task->formatted_elapsed_time;
@@ -164,6 +312,40 @@ class VolunteerTaskController extends Controller
         $task->source_name = $task->source_name;
         $task->beneficiary_name = $task->beneficiary_name;
 
+        // ✅ معلومات إضافية حسب المصدر
+        if ($task->aidApplication) {
+            $task->aid_details = [
+                'type' => $task->aidApplication->type,
+                'status' => $task->aidApplication->status,
+                'is_urgent' => $task->aidApplication->is_urgent,
+                'amount_requested' => $task->aidApplication->amount_requested,
+                'amount_approved' => $task->aidApplication->amount_approved,
+                'admin_notes' => $task->aidApplication->admin_notes,
+                'created_at' => $task->aidApplication->created_at,
+            ];
+        }
+
+        if ($task->visit) {
+            $task->visit_details = [
+                'id' => $task->visit->id,
+                'date' => $task->visit->formatted_date,
+                'time' => $task->visit->formatted_time,
+                'type' => $task->visit->visit_type,
+                'status' => $task->visit->status,
+                'location' => $task->visit->location,
+                'notes' => $task->visit->notes,
+            ];
+        }
+
+        if ($task->campaign) {
+            $task->campaign_details = [
+                'id' => $task->campaign->id,
+                'title' => $task->campaign->title,
+                'progress' => $task->campaign->progress_percentage,
+                'status' => $task->campaign->status,
+            ];
+        }
+
         return response()->json([
             'code' => '200',
             'success' => true,
@@ -173,7 +355,7 @@ class VolunteerTaskController extends Controller
     }
 
     /**
-     * بدء المهمة (تسجيل الحضور)
+     * بدء المهمة (تسجيل الحضور) - يدعم المهام المفتوحة
      * 
      * @api {post} /api/volunteer/tasks/{id}/start Start Task
      * @apiHeader Authorization Bearer {token}
@@ -191,17 +373,40 @@ class VolunteerTaskController extends Controller
             ], 404);
         }
 
-        $task = VolunteerTask::where('volunteer_id', $volunteer->id)
-            ->where('id', $id)
-            ->firstOrFail();
+        // ✅ البحث عن المهمة (بدون شرط volunteer_id)
+        $task = VolunteerTask::find($id);
+        
+        if (!$task) {
+            return response()->json([
+                'code' => '404',
+                'success' => false,
+                'message' => 'المهمة غير موجودة',
+            ], 404);
+        }
 
-        // ✅ التحقق من أن المهمة جديدة
+        // ✅ التحقق: المهمة جديدة
         if ($task->status !== 'جديدة') {
             return response()->json([
                 'code' => '400',
                 'success' => false,
                 'message' => 'لا يمكن بدء مهمة غير جديدة',
             ], 400);
+        }
+
+        // ✅ ✅ ✅ إذا كانت المهمة مفتوحة (بدون متطوع)، خصصها لهذا المتطوع
+        if (!$task->volunteer_id) {
+            $task->update(['volunteer_id' => $volunteer->id]);
+            $task->refresh();
+        }
+
+        // ✅ التحقق: المهمة مخصصة لهذا المتطوع
+        if ($task->volunteer_id != $volunteer->id) {
+            return response()->json([
+                'code' => '403',
+                'success' => false,
+                'message' => 'هذه المهمة مأخوذة من قبل متطوع آخر',
+                'task_volunteer_id' => $task->volunteer_id,
+            ], 403);
         }
 
         // ✅ التحقق من وجود تسجيل حضور سابق
@@ -246,6 +451,7 @@ class VolunteerTaskController extends Controller
                     'task' => $task,
                     'check_in' => $checkIn,
                     'elapsed_time' => $task->formatted_elapsed_time,
+                    'assigned_to_you' => true,
                 ]
             ], 200);
 
@@ -336,7 +542,19 @@ class VolunteerTaskController extends Controller
 
             // ✅ تحديث حالة طلب المساعدة إذا كانت المهمة مرتبطة به
             if ($task->aidApplication) {
-                $task->aidApplication->update(['status' => 'completed']);
+                $task->aidApplication->update([
+                    'status' => 'completed',
+                    'completed_at' => now(),
+                ]);
+                
+                // ✅ إشعار للمستفيد صاحب طلب المساعدة
+                Notification::sendPushOnly(
+                    $task->aidApplication->user_id,
+                    '✅ تم إكمال طلب المساعدة',
+                    "تم إكمال طلب المساعدة '{$task->title}' بواسطة المتطوع {$user->name}",
+                    'aid_completed',
+                    ['application_id' => $task->aidApplication->id]
+                );
             }
 
             // ✅ تحديث حالة الزيارة إذا كانت المهمة مرتبطة بها
@@ -348,7 +566,7 @@ class VolunteerTaskController extends Controller
             $this->updateCertificates($volunteer);
             $this->updatePoints($volunteer, $duration);
 
-            // ✅ إشعار للمستفيد
+            // ✅ إشعار للمستفيد (إذا كان هناك مستفيد مباشر)
             if ($task->beneficiary_id) {
                 Notification::sendPushOnly(
                     $task->beneficiary_id,
@@ -371,6 +589,8 @@ class VolunteerTaskController extends Controller
                     'duration_hours' => round($duration, 2),
                     'total_hours' => $volunteer->total_hours,
                     'certificates_updated' => true,
+                    'aid_application_updated' => $task->aidApplication ? true : false,
+                    'visit_updated' => $task->visit ? true : false,
                 ]
             ], 200);
 
@@ -480,6 +700,145 @@ class VolunteerTaskController extends Controller
         ], 200);
     }
 
+    /**
+     * إحصائيات المتطوع
+     */
+    public function statistics(Request $request)
+    {
+        $user = $request->user();
+        $volunteer = $user->volunteer;
+
+        if (!$volunteer) {
+            return response()->json([
+                'code' => '404',
+                'success' => false,
+                'message' => 'لم يتم العثور على ملف المتطوع',
+            ], 404);
+        }
+
+        $totalHours = $volunteer->total_hours ?? 0;
+        $completedTasks = VolunteerTask::where('volunteer_id', $volunteer->id)
+            ->where('status', 'مكتملة')
+            ->count();
+
+        $averageRating = VolunteerEvaluation::where('volunteer_id', $volunteer->id)
+            ->whereNotNull('rating')
+            ->avg('rating') ?? 0;
+
+        $stats = [
+            'total_tasks' => VolunteerTask::where('volunteer_id', $volunteer->id)->count(),
+            'in_progress' => VolunteerTask::where('volunteer_id', $volunteer->id)
+                ->where('status', 'قيد التنفيذ')->count(),
+            'new_tasks' => VolunteerTask::where('volunteer_id', $volunteer->id)
+                ->where('status', 'جديدة')->count(),
+            'certificates' => VolunteerCertificate::where('volunteer_id', $volunteer->id)->count(),
+        ];
+
+        return response()->json([
+            'code' => '200',
+            'success' => true,
+            'message' => 'تم جلب إحصائيات المتطوع بنجاح',
+            'data' => [
+                'volunteer' => [
+                    'id' => $volunteer->id,
+                    'name' => $user->name,
+                ],
+                'statistics' => [
+                    'total_hours' => round($totalHours, 1),
+                    'completed_tasks' => $completedTasks,
+                    'average_rating' => round($averageRating, 1),
+                    'total_tasks' => $stats['total_tasks'],
+                    'in_progress' => $stats['in_progress'],
+                    'new_tasks' => $stats['new_tasks'],
+                    'certificates' => $stats['certificates'],
+                ]
+            ]
+        ], 200);
+    }
+
+    /**
+     * الحصول على نقاط المتطوع والشارات
+     */
+    public function points(Request $request)
+    {
+        $user = $request->user();
+        $volunteer = $user->volunteer;
+
+        if (!$volunteer) {
+            return response()->json([
+                'code' => '404',
+                'success' => false,
+                'message' => 'لم يتم العثور على ملف المتطوع',
+            ], 404);
+        }
+
+        $points = $volunteer->points ?? 0;
+        $rank = $this->calculateRank($volunteer->id);
+        $badges = $volunteer->badges()->orderBy('earned_at', 'desc')->get();
+
+        return response()->json([
+            'code' => '200',
+            'success' => true,
+            'data' => [
+                'total_points' => $points,
+                'rank' => $rank,
+                'badges' => $badges->map(function($badge) {
+                    return [
+                        'name' => $badge->name,
+                        'icon' => $badge->icon,
+                        'description' => $badge->description,
+                        'earned_at' => $badge->earned_at?->format('Y-m-d'),
+                    ];
+                }),
+            ]
+        ], 200);
+    }
+
+    /**
+     * لوحة المتصدرين
+     */
+    public function leaderboard(Request $request)
+    {
+        $user = $request->user();
+        $volunteer = $user->volunteer;
+
+        if (!$volunteer) {
+            return response()->json([
+                'code' => '404',
+                'success' => false,
+                'message' => 'لم يتم العثور على ملف المتطوع',
+            ], 404);
+        }
+
+        $topVolunteers = VolunterProfile::with('user')
+            ->orderBy('points', 'desc')
+            ->limit(10)
+            ->get();
+
+        $leaderboard = $topVolunteers->map(function($v, $index) use ($volunteer) {
+            return [
+                'rank' => $index + 1,
+                'name' => $v->user?->name ?? 'متطوع',
+                'points' => $v->points ?? 0,
+                'badge' => $this->getRankBadge($index + 1),
+                'is_current_user' => $v->id === $volunteer->id,
+            ];
+        });
+
+        $userRank = $this->calculateRank($volunteer->id);
+        $totalVolunteers = VolunterProfile::count();
+
+        return response()->json([
+            'code' => '200',
+            'success' => true,
+            'data' => [
+                'leaderboard' => $leaderboard,
+                'user_rank' => $userRank,
+                'total_volunteers' => $totalVolunteers,
+            ]
+        ], 200);
+    }
+
     // ==================== PRIVATE METHODS ====================
 
     /**
@@ -514,232 +873,72 @@ class VolunteerTaskController extends Controller
             }
         }
     }
- 
-public function statistics(Request $request)
-{
-    $user = $request->user();
-    $volunteer = $user->volunteer;
 
-    if (!$volunteer) {
-        return response()->json([
-            'code' => '404',
-            'success' => false,
-            'message' => 'لم يتم العثور على ملف المتطوع',
-        ], 404);
+    /**
+     * حساب ترتيب المتطوع
+     */
+    private function calculateRank($volunteerId)
+    {
+        $points = VolunterProfile::where('id', $volunteerId)->value('points') ?? 0;
+        return VolunterProfile::where('points', '>', $points)->count() + 1;
     }
 
-   
-    $totalHours = $volunteer->total_hours ?? 0;
-
-    
-    $completedTasks = VolunteerTask::where('volunteer_id', $volunteer->id)
-        ->where('status', 'مكتملة')
-        ->count();
-
-    
-    $averageRating = VolunteerEvaluation::where('volunteer_id', $volunteer->id)
-        ->whereNotNull('rating')
-        ->avg('rating') ?? 0;
-
-    $stats = [
-        'total_tasks' => VolunteerTask::where('volunteer_id', $volunteer->id)->count(),
-        'in_progress' => VolunteerTask::where('volunteer_id', $volunteer->id)
-            ->where('status', 'قيد التنفيذ')->count(),
-        'new_tasks' => VolunteerTask::where('volunteer_id', $volunteer->id)
-            ->where('status', 'جديدة')->count(),
-        'certificates' => VolunteerCertificate::where('volunteer_id', $volunteer->id)->count(),
-    ];
-
-    return response()->json([
-        'code' => '200',
-        'success' => true,
-        'message' => 'تم جلب إحصائيات المتطوع بنجاح',
-        'data' => [
-            'volunteer' => [
-                'id' => $volunteer->id,
-                'name' => $user->name,
-            ],
-            'statistics' => [
-                'total_hours' => round($totalHours, 1),  // 120h
-                'completed_tasks' => $completedTasks,     // 12
-                'average_rating' => round($averageRating, 1), // 4.8
-                'total_tasks' => $stats['total_tasks'],
-                'in_progress' => $stats['in_progress'],
-                'new_tasks' => $stats['new_tasks'],
-                'certificates' => $stats['certificates'],
-            ]
-        ]
-    ], 200);
-}
-// app/Http/Controllers/VolunteerTaskController.php
-
-/**
- * الحصول على نقاط المتطوع والشارات
- * 
- * @api {get} /api/volunteer/points Get Volunteer Points
- * @apiHeader Authorization Bearer {token}
- */
-public function points(Request $request)
-{
-    $user = $request->user();
-    $volunteer = $user->volunteer;
-
-    if (!$volunteer) {
-        return response()->json([
-            'code' => '404',
-            'success' => false,
-            'message' => 'لم يتم العثور على ملف المتطوع',
-        ], 404);
+    /**
+     * الحصول على شارة الترتيب
+     */
+    private function getRankBadge($rank)
+    {
+        return match($rank) {
+            1 => '🥇',
+            2 => '🥈',
+            3 => '🥉',
+            default => '⭐',
+        };
     }
 
-    // ✅ حساب النقاط
-    $points = $volunteer->points ?? 0;
-    
-    // ✅ حساب الترتيب
-    $rank = $this->calculateRank($volunteer->id);
-    
-    // ✅ جلب الشارات
-    $badges = $volunteer->badges()->orderBy('earned_at', 'desc')->get();
-
-    return response()->json([
-        'code' => '200',
-        'success' => true,
-        'data' => [
-            'total_points' => $points,
-            'rank' => $rank,
-            'badges' => $badges->map(function($badge) {
-                return [
-                    'name' => $badge->name,
-                    'icon' => $badge->icon,
-                    'description' => $badge->description,
-                    'earned_at' => $badge->earned_at?->format('Y-m-d'),
-                ];
-            }),
-        ]
-    ], 200);
-}
-
-/**
- * لوحة المتصدرين
- * 
- * @api {get} /api/volunteer/leaderboard Get Leaderboard
- * @apiHeader Authorization Bearer {token}
- */
-public function leaderboard(Request $request)
-{
-    $user = $request->user();
-    $volunteer = $user->volunteer;
-
-    if (!$volunteer) {
-        return response()->json([
-            'code' => '404',
-            'success' => false,
-            'message' => 'لم يتم العثور على ملف المتطوع',
-        ], 404);
+    /**
+     * تحديث النقاط تلقائياً عند إكمال المهمة
+     */
+    private function updatePoints($volunteer, $duration)
+    {
+        $pointsEarned = round($duration * 10);
+        $volunteer->increment('points', $pointsEarned);
+        $this->updateBadges($volunteer);
     }
 
-    // ✅ جلب جميع المتطوعين مرتبين حسب النقاط
-    $topVolunteers = VolunterProfile::with('user')
-        ->orderBy('points', 'desc')
-        ->limit(10)
-        ->get();
-
-    // ✅ تحويل البيانات
-    $leaderboard = $topVolunteers->map(function($v, $index) use ($volunteer) {
-        return [
-            'rank' => $index + 1,
-            'name' => $v->user?->name ?? 'متطوع',
-            'points' => $v->points ?? 0,
-            'badge' => $this->getRankBadge($index + 1),
-            'is_current_user' => $v->id === $volunteer->id,
-        ];
-    });
-
-    // ✅ ترتيب المستخدم الحالي
-    $userRank = $this->calculateRank($volunteer->id);
-    $totalVolunteers = VolunterProfile::count();
-
-    return response()->json([
-        'code' => '200',
-        'success' => true,
-        'data' => [
-            'leaderboard' => $leaderboard,
-            'user_rank' => $userRank,
-            'total_volunteers' => $totalVolunteers,
-        ]
-    ], 200);
-}
-
-/**
- * حساب ترتيب المتطوع
- */
-private function calculateRank($volunteerId)
-{
-    $points = VolunterProfile::where('id', $volunteerId)->value('points') ?? 0;
-    
-    return VolunterProfile::where('points', '>', $points)->count() + 1;
-}
-
-/**
- * الحصول على شارة الترتيب
- */
-private function getRankBadge($rank)
-{
-    return match($rank) {
-        1 => '🥇',
-        2 => '🥈',
-        3 => '🥉',
-        default => '⭐',
-    };
-}
-
-/**
- * تحديث النقاط تلقائياً عند إكمال المهمة
- */
-private function updatePoints($volunteer, $duration)
-{
-    // ✅ نقطة لكل ساعة تطوع
-    $pointsEarned = round($duration * 10); // 10 نقاط لكل ساعة
-    
-    $volunteer->increment('points', $pointsEarned);
-    
-    // ✅ تحديث الشارات بناءً على النقاط
-    $this->updateBadges($volunteer);
-}
-
-/**
- * تحديث الشارات بناءً على النقاط
- */
-private function updateBadges($volunteer)
-{
-    $points = $volunteer->points ?? 0;
-    $badges = [];
-    
-    if ($points >= 500) {
-        $badges[] = ['name' => 'نشط', 'icon' => '🔥', 'description' => '500+ نقطة'];
+    /**
+     * تحديث الشارات بناءً على النقاط
+     */
+    private function updateBadges($volunteer)
+    {
+        $points = $volunteer->points ?? 0;
+        $badges = [];
+        
+        if ($points >= 500) {
+            $badges[] = ['name' => 'نشط', 'icon' => '🔥', 'description' => '500+ نقطة'];
+        }
+        if ($points >= 1000) {
+            $badges[] = ['name' => 'ممتاز', 'icon' => '⭐', 'description' => '1000+ نقطة'];
+        }
+        if ($points >= 2000) {
+            $badges[] = ['name' => 'إنساني', 'icon' => '❤️', 'description' => '2000+ نقطة'];
+        }
+        if ($points >= 3000) {
+            $badges[] = ['name' => 'أسطورة', 'icon' => '🏆', 'description' => '3000+ نقطة'];
+        }
+        if ($points >= 5000) {
+            $badges[] = ['name' => 'نشط جدا', 'icon' => '🔥🔥', 'description' => '5000+ نقطة'];
+        }
+        
+        foreach ($badges as $badgeData) {
+            VolunteerBadge::firstOrCreate([
+                'volunteer_id' => $volunteer->id,
+                'name' => $badgeData['name'],
+            ], [
+                'icon' => $badgeData['icon'],
+                'description' => $badgeData['description'],
+                'earned_at' => now(),
+            ]);
+        }
     }
-    if ($points >= 1000) {
-        $badges[] = ['name' => 'ممتاز', 'icon' => '⭐', 'description' => '1000+ نقطة'];
-    }
-    if ($points >= 2000) {
-        $badges[] = ['name' => 'إنساني', 'icon' => '❤️', 'description' => '2000+ نقطة'];
-    }
-    if ($points >= 3000) {
-        $badges[] = ['name' => 'أسطورة', 'icon' => '🏆', 'description' => '3000+ نقطة'];
-    }
-    if ($points >= 5000) {
-        $badges[] = ['name' => 'نشط جدا', 'icon' => '🔥🔥', 'description' => '5000+ نقطة'];
-    }
-    
-    foreach ($badges as $badgeData) {
-        VolunteerBadge::firstOrCreate([
-            'volunteer_id' => $volunteer->id,
-            'name' => $badgeData['name'],
-        ], [
-            'icon' => $badgeData['icon'],
-            'description' => $badgeData['description'],
-            'earned_at' => now(),
-        ]);
-    }
-}
 }

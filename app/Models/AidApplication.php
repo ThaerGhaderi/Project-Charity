@@ -84,4 +84,8 @@ class AidApplication extends Model
     {
         return $this->type;
     }
+      public function volunteerTask()
+    {
+        return $this->hasOne(VolunteerTask::class, 'aid_application_id');
+    }
 }

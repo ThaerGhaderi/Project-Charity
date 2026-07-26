@@ -17,7 +17,9 @@ use Illuminate\Support\Facades\DB;
 
 class VisitController extends Controller
 {
-   
+    /**
+     * عرض جميع الزيارات مع تصفية
+     */
     public function index(Request $request)
     {
         $user = $request->user();
@@ -33,30 +35,25 @@ class VisitController extends Controller
         $query = Visit::where('beneficiary_id', $user->id)
             ->with(['socialWorker', 'creator', 'volunteerTask']);
 
-        
         if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
 
-        
         if ($request->filled('visit_type')) {
             $query->where('visit_type', $request->visit_type);
         }
 
-       
         if ($request->boolean('upcoming_only')) {
             $query->where('visit_date', '>=', now()->startOfDay())
                 ->whereIn('status', ['قيد الانتظار', 'مؤكدة']);
         }
 
-        
         $sortBy = $request->get('sort_by', 'visit_date');
         $sortOrder = $request->get('sort_order', 'asc');
         $query->orderBy($sortBy, $sortOrder);
 
         $visits = $query->get();
 
-      
         $visits->transform(function ($visit) {
             $visit->status_text = $visit->status;
             $visit->type_text = $visit->visit_type;
@@ -70,7 +67,6 @@ class VisitController extends Controller
             return $visit;
         });
 
-       
         $stats = [
             'total' => $visits->count(),
             'upcoming' => $visits->where('is_upcoming', true)->count(),
@@ -95,7 +91,9 @@ class VisitController extends Controller
         ], 200);
     }
 
-    
+    /**
+     * عرض تفاصيل زيارة معينة
+     */
     public function show($id, Request $request)
     {
         $user = $request->user();
@@ -123,7 +121,9 @@ class VisitController extends Controller
         ], 200);
     }
 
-    
+    /**
+     * إنشاء زيارة جديدة
+     */
     public function store(RequestsVisitRequest $request)
     {
         $user = $request->user();
@@ -151,8 +151,8 @@ class VisitController extends Controller
 
             $visit = Visit::create($validated);
 
-            // ✅ ✅ ✅ إنشاء مهمة وربطها مع جميع المتطوعين
-            $this->createTaskForAllVolunteers($visit);
+            // ✅ إنشاء مهمة مفتوحة للجميع (بدون volunteer_id)
+            $this->createOpenTask($visit);
 
             $this->notifyAdmins($visit, 'new');
             
@@ -163,7 +163,7 @@ class VisitController extends Controller
             return response()->json([
                 'code' => '201',
                 'success' => true,
-                'message' => 'تم إنشاء الزيارة والمهمة المرتبطة بها بنجاح',
+                'message' => 'تم إنشاء الزيارة والمهمة المفتوحة بنجاح',
                 'data' => $visit->load(['beneficiary', 'socialWorker', 'volunteerTask']),
             ], 201);
 
@@ -177,130 +177,135 @@ class VisitController extends Controller
         }
     }
 
-   
-   public function update(RequestsUpdateVisitRequest $request, $id)
-{
-    
-    if (empty($request->all())) {
-        $jsonData = $request->json()->all();
-        if (!empty($jsonData)) {
-            $request->merge($jsonData);
-        }
-    }
-
-    $user = $request->user();
-    
-    
-    $visit = Visit::find($id);
-    
-    if (!$visit) {
-        return response()->json([
-            'code' => '404',
-            'success' => false,
-            'message' => 'الزيارة غير موجودة',
-        ], 404);
-    }
-
-   
-    $isAdmin = in_array($user->role, ['admin', 'Admin']);
-    $isBeneficiary = $user->id === $visit->beneficiary_id;
-    $isSocialWorker = $user->id === $visit->social_worker_id;
-
-    if (!$isAdmin && !$isBeneficiary && !$isSocialWorker) {
-        return response()->json([
-            'code' => '403',
-            'success' => false,
-            'message' => 'ليس لديك صلاحية لتحديث هذه الزيارة',
-            'debug' => [
-                'user_id' => $user->id,
-                'user_role' => $user->role,
-                'beneficiary_id' => $visit->beneficiary_id,
-                'social_worker_id' => $visit->social_worker_id,
-            ]
-        ], 403);
-    }
-
-    // ✅ لا يمكن تحديث زيارة مكتملة (إلا للأدمن)
-    if ($visit->status === 'مكتملة' && !$isAdmin) {
-        return response()->json([
-            'code' => '400',
-            'success' => false,
-            'message' => 'لا يمكن تحديث زيارة مكتملة',
-        ], 400);
-    }
-
-    try {
-        $validated = $request->validated();
-
-      
-        if (isset($validated['status'])) {
-            $oldStatus = $visit->status;
-            $newStatus = $validated['status'];
-
-            if ($newStatus === 'مؤكدة' && $oldStatus === 'قيد الانتظار') {
-                $visit->confirmed_at = now();
-                $this->notifyBeneficiary($visit, 'confirmed');
+    /**
+     * تحديث زيارة
+     */
+    public function update(RequestsUpdateVisitRequest $request, $id)
+    {
+        if (empty($request->all())) {
+            $jsonData = $request->json()->all();
+            if (!empty($jsonData)) {
+                $request->merge($jsonData);
             }
-
-            if ($newStatus === 'مكتملة') {
-                $visit->completed_at = now();
-                
-                // ✅ إذا كانت هناك مهمة مرتبطة، حدّث حالتها إلى مكتملة
-                if ($visit->volunteerTask) {
-                    $visit->volunteerTask->update(['status' => 'مكتملة']);
-                }
-                
-                $this->notifyBeneficiary($visit, 'completed');
-            }
-
-            if ($newStatus === 'ملغية') {
-                $visit->cancelled_at = now();
-                $visit->cancelled_reason = $validated['cancelled_reason'] ?? 'تم الإلغاء';
-                
-                // ✅ إذا كانت هناك مهمة مرتبطة، حدّث حالتها إلى ملغية
-                if ($visit->volunteerTask) {
-                    $visit->volunteerTask->update(['status' => 'ملغية']);
-                }
-                
-                $this->notifyBeneficiary($visit, 'cancelled');
-            }
-
-            $visit->status = $newStatus;
         }
 
+        $user = $request->user();
+        $visit = Visit::find($id);
         
-        unset($validated['status'], $validated['cancelled_reason']);
-        
-        if (!empty($validated)) {
-            $visit->fill($validated);
+        if (!$visit) {
+            return response()->json([
+                'code' => '404',
+                'success' => false,
+                'message' => 'الزيارة غير موجودة',
+            ], 404);
         }
 
-        $visit->save();
+        $isAdmin = in_array($user->role, ['admin', 'Admin']);
+        $isBeneficiary = $user->id === $visit->beneficiary_id;
+        $isSocialWorker = $user->id === $visit->social_worker_id;
 
-        return response()->json([
-            'code' => '200',
-            'success' => true,
-            'message' => 'تم تحديث الزيارة بنجاح',
-            'data' => $visit->fresh()->load(['beneficiary', 'socialWorker', 'volunteerTask']),
-        ], 200);
+        if (!$isAdmin && !$isBeneficiary && !$isSocialWorker) {
+            return response()->json([
+                'code' => '403',
+                'success' => false,
+                'message' => 'ليس لديك صلاحية لتحديث هذه الزيارة',
+                'debug' => [
+                    'user_id' => $user->id,
+                    'user_role' => $user->role,
+                    'beneficiary_id' => $visit->beneficiary_id,
+                    'social_worker_id' => $visit->social_worker_id,
+                ]
+            ], 403);
+        }
 
-    } catch (\Illuminate\Validation\ValidationException $e) {
-        return response()->json([
-            'code' => '422',
-            'success' => false,
-            'message' => 'خطأ في التحقق من البيانات',
-            'errors' => $e->errors(),
-        ], 422);
-    } catch (\Exception $e) {
-        return response()->json([
-            'code' => '500',
-            'success' => false,
-            'message' => 'حدث خطأ أثناء تحديث الزيارة',
-            'error' => $e->getMessage(),
-        ], 500);
+        if ($visit->status === 'مكتملة' && !$isAdmin) {
+            return response()->json([
+                'code' => '400',
+                'success' => false,
+                'message' => 'لا يمكن تحديث زيارة مكتملة',
+            ], 400);
+        }
+
+        try {
+            $validated = $request->validated();
+
+            if (isset($validated['status'])) {
+                $oldStatus = $visit->status;
+                $newStatus = $validated['status'];
+
+                if ($newStatus === 'مؤكدة' && $oldStatus === 'قيد الانتظار') {
+                    $visit->confirmed_at = now();
+                    $this->notifyBeneficiary($visit, 'confirmed');
+                }
+
+                if ($newStatus === 'مكتملة') {
+                    $visit->completed_at = now();
+                    
+                    // ✅ تحديث المهمة المرتبطة إلى مكتملة
+                    if ($visit->volunteerTask) {
+                        $visit->volunteerTask->update([
+                            'status' => 'مكتملة',
+                            'completed_at' => now(),
+                            'progress_percentage' => 100,
+                        ]);
+                    }
+                    
+                    $this->notifyBeneficiary($visit, 'completed');
+                }
+
+                if ($newStatus === 'ملغية') {
+                    $visit->cancelled_at = now();
+                    $visit->cancelled_reason = $validated['cancelled_reason'] ?? 'تم الإلغاء';
+                    
+                    // ✅ تحديث المهمة المرتبطة إلى ملغية
+                    if ($visit->volunteerTask) {
+                        $visit->volunteerTask->update([
+                            'status' => 'ملغية',
+                            'cancelled_at' => now(),
+                        ]);
+                    }
+                    
+                    $this->notifyBeneficiary($visit, 'cancelled');
+                }
+
+                $visit->status = $newStatus;
+            }
+
+            unset($validated['status'], $validated['cancelled_reason']);
+            
+            if (!empty($validated)) {
+                $visit->fill($validated);
+            }
+
+            $visit->save();
+
+            return response()->json([
+                'code' => '200',
+                'success' => true,
+                'message' => 'تم تحديث الزيارة بنجاح',
+                'data' => $visit->fresh()->load(['beneficiary', 'socialWorker', 'volunteerTask']),
+            ], 200);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'code' => '422',
+                'success' => false,
+                'message' => 'خطأ في التحقق من البيانات',
+                'errors' => $e->errors(),
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'code' => '500',
+                'success' => false,
+                'message' => 'حدث خطأ أثناء تحديث الزيارة',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
     }
-}
 
+    /**
+     * إلغاء زيارة
+     */
     public function destroy($id, Request $request)
     {
         $user = $request->user();
@@ -323,6 +328,14 @@ class VisitController extends Controller
                 'cancelled_reason' => 'تم الإلغاء من قبل المستخدم',
             ]);
 
+            // ✅ تحديث المهمة المرتبطة
+            if ($visit->volunteerTask) {
+                $visit->volunteerTask->update([
+                    'status' => 'ملغية',
+                    'cancelled_at' => now(),
+                ]);
+            }
+
             $this->notifyBeneficiary($visit, 'cancelled');
 
             return response()->json([
@@ -341,7 +354,9 @@ class VisitController extends Controller
         }
     }
 
-    
+    /**
+     * إحصائيات الزيارات
+     */
     public function statistics(Request $request)
     {
         $user = $request->user();
@@ -401,6 +416,9 @@ class VisitController extends Controller
 
     // ==================== PRIVATE METHODS ====================
 
+    /**
+     * التحقق من صلاحية الوصول
+     */
     private function authorizeAccess(Visit $visit, $user)
     {
         $isAdmin = in_array($user->role, ['admin', 'Admin']);
@@ -414,11 +432,49 @@ class VisitController extends Controller
         }
     }
 
+    /**
+     * ✅ إنشاء مهمة مفتوحة للجميع (بدون volunteer_id)
+     * 
+     * @param Visit $visit
+     * @return void
+     */
+    private function createOpenTask($visit)
+    {
+        // ✅ الحصول على مشرف (أدمن)
+        $admin = User::whereIn('role', ['admin', 'Admin'])->first();
+        $supervisorId = $admin ? $admin->id : 1;
+
+        // ✅ ✅ ✅ إنشاء مهمة واحدة فقط بدون volunteer_id (مفتوحة للجميع)
+        VolunteerTask::create([
+            'visit_id' => $visit->id,
+            'beneficiary_id' => $visit->beneficiary_id,
+            'volunteer_id' => null, // 🔑 مفتوحة للجميع
+            'supervisor_id' => $supervisorId,
+            'campaign_id' => null,
+            'aid_application_id' => null,
+            'title' => "زيارة ميدانية - {$visit->location}",
+            'description' => "زيارة المستفيد {$visit->beneficiary->name} في {$visit->location}",
+            'location' => $visit->location,
+            'start_time' => null,
+            'end_time' => null,
+            'expected_end_time' => $visit->visit_date,
+            'status' => 'جديدة',
+            'progress_percentage' => 0,
+            'points_earned' => 0,
+            'supervisor_notes' => null,
+            'completed_at' => null,
+            'cancelled_at' => null,
+        ]);
+    }
+
+    /**
+     * إشعار للمشرفين
+     */
     private function notifyAdmins(Visit $visit, string $type)
     {
         $admins = User::whereIn('role', ['admin', 'Admin'])->get();
 
-        $title = ' طلب زيارة جديد';
+        $title = '📋 طلب زيارة جديد';
         $body = "طلب زيارة جديد من {$visit->beneficiary->name} في {$visit->location}";
 
         foreach ($admins as $admin) {
@@ -435,23 +491,26 @@ class VisitController extends Controller
         }
     }
 
+    /**
+     * إشعار للمستفيد
+     */
     private function notifyBeneficiary(Visit $visit, string $type)
     {
         $messages = [
             'new' => [
-                'title' => ' تم إنشاء زيارة جديدة',
+                'title' => '📋 تم إنشاء زيارة جديدة',
                 'body' => "تم إنشاء زيارة جديدة لك في {$visit->location} بتاريخ {$visit->formatted_date}",
             ],
             'confirmed' => [
-                'title' => ' تم تأكيد الزيارة',
+                'title' => '✅ تم تأكيد الزيارة',
                 'body' => "تم تأكيد زيارتك في {$visit->location} بتاريخ {$visit->formatted_date} الساعة {$visit->formatted_time}",
             ],
             'completed' => [
-                'title' => ' تم إكمال الزيارة',
+                'title' => '✅ تم إكمال الزيارة',
                 'body' => "تم إكمال زيارتك في {$visit->location} بتاريخ {$visit->formatted_date}",
             ],
             'cancelled' => [
-                'title' => ' تم إلغاء الزيارة',
+                'title' => '❌ تم إلغاء الزيارة',
                 'body' => "تم إلغاء زيارتك في {$visit->location}",
             ],
         ];
@@ -468,58 +527,5 @@ class VisitController extends Controller
                 'type' => $type,
             ]
         );
-    }
-
-    /**
-     * ✅ إنشاء مهمة وربطها مع جميع المتطوعين
-     * 
-     * @param Visit $visit
-     * @return void
-     */
-    private function createTaskForAllVolunteers($visit)
-    {
-        // ✅ جلب جميع المتطوعين المتاحين
-        $volunteers = VolunterProfile::where('status', 'متاح')->get();
-        
-        // ✅ إذا لم يوجد متطوعين، أنشئ متطوع افتراضي
-        if ($volunteers->isEmpty()) {
-            $user = User::create([
-                'name' => 'متطوع افتراضي',
-                'email' => 'volunteer_default_' . time() . '@test.com',
-                'password' => bcrypt('password123'),
-                'role' => 'volunteer',
-                'profile_completed' => true,
-                'email_verified_at' => now(),
-            ]);
-            
-            $volunteer = VolunterProfile::create([
-                'user_id' => $user->id,
-                'Favorite_period' => 'صباحاً',
-                'Commitment_type' => 'منتظم',
-                'Educational_level' => 'بكالوريوس',
-                'status' => 'متاح',
-                'total_hours' => 0,
-            ]);
-            
-            $volunteers = collect([$volunteer]);
-        }
-
-        $admin = User::whereIn('role', ['admin', 'Admin'])->first();
-        $supervisorId = $admin ? $admin->id : 1;
-
-        // ✅ ✅ ✅ إنشاء مهمة لكل متطوع
-        foreach ($volunteers as $volunteer) {
-            VolunteerTask::create([
-                'visit_id' => $visit->id,
-                'beneficiary_id' => $visit->beneficiary_id,
-                'volunteer_id' => $volunteer->id,
-                'title' => "زيارة ميدانية - {$visit->location}",
-                'description' => "زيارة المستفيد {$visit->beneficiary->name} في {$visit->location}",
-                'location' => $visit->location,
-                'status' => 'جديدة',
-                'supervisor_id' => $supervisorId,
-                'expected_end_time' => $visit->visit_date,
-            ]);
-        }
     }
 }

@@ -1,5 +1,6 @@
 <?php
 
+
 use App\Http\Controllers\AidApplicationController;
 use App\Http\Controllers\BeneficiaryProfileController;
 use App\Http\Controllers\CampaignController;
@@ -12,6 +13,7 @@ use App\Http\Controllers\DomainController;
 use App\Http\Controllers\DonationCartController;
 use App\Http\Controllers\DonationController;
 use App\Http\Controllers\DonorProfileController;
+use App\Http\Controllers\DorationController;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\GiftDonationController;
 use App\Http\Controllers\LoyaltyPointsController;
@@ -27,6 +29,7 @@ use App\Http\Controllers\VolunteerTaskController;
 use App\Http\Controllers\VolunterProfileController as ControllersVolunterProfileController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
+
 
 
 
@@ -48,10 +51,10 @@ Route::prefix('auth')->group(function () {
 });
 
 
-Route::post('/auth/dashboard/login', [EmployeeController::class, 'login']);
+  Route::post('/auth/dashboard/login', [EmployeeController::class, 'login']);
 
 Route::middleware('auth:sanctum')->group(function () {
-   
+ 
     Route::post('/auth/dashboard/logout', [EmployeeController::class, 'logout']);
 });
 
@@ -163,18 +166,17 @@ Route::middleware('auth:sanctum')->group(function () {
     // ==================== VOLUNTEER ROUTES ====================
     Route::prefix('volunteer')->group(function () {
         Route::post('/complete-profile', [ControllersVolunterProfileController::class, 'completeProfile']); //!اكمال الملف الشخصي
-        Route::get('/profile', [ControllersVolunterProfileController::class, 'getProfile']);
-        Route::put('/profile', [ControllersVolunterProfileController::class, 'updateProfile']);
+       // Route::get('/profile', [ControllersVolunterProfileController::class, 'getProfile']);
         Route::get('/statistics', [VolunteerTaskController::class, 'statistics']); //!جلب إحصائيات المتطوع
 
         Route::prefix('tasks')->group(function () {
+            Route::get('/available', [VolunteerTaskController::class, 'availableTasks']);
             Route::get('/', [VolunteerTaskController::class, 'index']); //!جلب جميع المهام مع تصفية حسب الطلب
             Route::get('/current', [VolunteerTaskController::class, 'currentTask']); //!جلب المهمة الحالية للمتطوع
             Route::get('/{id}', [VolunteerTaskController::class, 'show']);         //!جلب تفاصيل مهمة معينة
             Route::post('/{id}/start', [VolunteerTaskController::class, 'startTask']); //!بدء مهمة معينة
             Route::post('/{id}/end', [VolunteerTaskController::class, 'endTask']);   //!إنهاء مهمة معينة
         });
-
         // ✅ التقييمات (جديد)
         Route::get('/evaluations', [VolunteerTaskController::class, 'evaluations']); //!جلب جميع التقييمات للمتطوع 
 
@@ -227,6 +229,16 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/remove-token', [NotificationController::class, 'removeToken']);
         Route::post('/test-push', [NotificationController::class, 'testPush']);
     });
+
+    // ==================== CAMPAIGN ROUTES ====================
+    //! للويب
+Route::controller(CampaignController::class)->group(function () {
+    Route::get('/campaigns/getAll', 'getAll');
+    Route::post('/campaigns/store', 'store');
+    Route::get('/campaigns/show/{id}', 'showCampaign');
+    Route::put('/campaigns/update/{id}', 'update');
+    Route::delete('/campaigns/delete/{id}', 'destroy');
+});
 });
 
 // ==================== CHAT ROUTES ====================
@@ -240,14 +252,7 @@ Route::prefix('chat')->middleware('auth:sanctum')->group(function () {
     Route::post('/conversations/{id}/messages', [ChatController::class, 'sendMessage']); //!ارسال رسالة في المحادثة
 });
 
-// ==================== CAMPAIGN ROUTES ====================
-Route::controller(CampaignController::class)->group(function () {
-    Route::get('/campaigns/getAll', 'getAll');
-    Route::post('/campaigns/store', 'store');
-    Route::get('/campaigns/show/{id}', 'showCampaign');
-    Route::put('/campaigns/update/{id}', 'update');
-    Route::delete('/campaigns/delete/{id}', 'destroy');
-});
+
 
 // ==================== BENEFICIARIES ROUTES (Admin) ====================
 Route::get('/beneficiaries', [BeneficiaryProfileController::class, 'index']);
@@ -257,14 +262,14 @@ Route::patch('/beneficiaries/{id}/status', [BeneficiaryProfileController::class,
 Route::delete('/beneficiaries/{id}', [BeneficiaryProfileController::class, 'destroy']);
 
 // ==================== DONATIONS ROUTES (Admin/Public) ====================
-Route::post('/donations', [DonationController::class, 'store']);
-Route::get('/donations', [DonationController::class, 'index']);
-Route::get('/donations/{id}', [DonationController::class, 'show']);
-Route::delete('/donations/{id}', [DonationController::class, 'destroy']);
-Route::put('/donations/{id}', [DonationController::class, 'update']);
+Route::post('/donations', [DorationController::class, 'store']);
+Route::get('/donations', [DorationController::class, 'index']);
+Route::get('/donations/{id}', [DorationController::class, 'show']);
+Route::delete('/donations/{id}', [DorationController::class, 'destroy']);
+Route::put('/donations/{id}', [DorationController::class, 'update']);
 
 // ==================== EXPORT DONATIONS ====================
-Route::get('/users/exportDonations', [DonationController::class, 'export']);
+Route::get('/users/exportDonations', [DorationController::class, 'export']);
 
 // ==================== DOWNLOAD DONATION FILE ====================
 Route::get('/download-donation', function () {

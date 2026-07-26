@@ -32,8 +32,15 @@ class Campaign extends Model
 
   
     protected $appends = ['achieved_amount', 'donors_count', 'progress_percentage'];
+  protected static function booted()
+    {
+        static::creating(function ($campaign) {
+            if (auth()->check()) {
+                $campaign->created_by = auth()->id();
+            }
+        });
+    }
 
-   
     public function creator()
     {
         return $this->belongsTo(User::class, 'created_by');
