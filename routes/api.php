@@ -41,7 +41,7 @@ Route::prefix('auth')->group(function () {
     Route::post('/reset-password', [UserController::class, 'resetPassword']);
     Route::post('/resend-otp', [UserController::class, 'resendOtp']);
 
-    
+
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('/verify-otp', [UserController::class, 'verifyOtp']);
         Route::post('/select-role', [UserController::class, 'selectRole']);
@@ -54,7 +54,7 @@ Route::prefix('auth')->group(function () {
   Route::post('/auth/dashboard/login', [EmployeeController::class, 'login']);
 
 Route::middleware('auth:sanctum')->group(function () {
- 
+
     Route::post('/auth/dashboard/logout', [EmployeeController::class, 'logout']);
 });
 
@@ -72,13 +72,13 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/aid-applications/types', [AidApplicationController::class, 'types']); //!جلب أنواع المساعدة
         Route::get('/aid-applications/statuses', [AidApplicationController::class, 'statuses']); //!انواع حالات الطلبات
         Route::post('/aid-applications', [AidApplicationController::class, 'store']); //!انشاء طلب مساعدة
-        Route::get('/aid-applications/{id}', [AidApplicationController::class, 'show']); //!اظهار تفاصيل طلب 
+        Route::get('/aid-applications/{id}', [AidApplicationController::class, 'show']); //!اظهار تفاصيل طلب
         Route::put('/aid-applications/{id}', [AidApplicationController::class, 'update']); //!تعديل حالة طلب معين
         Route::delete('/aid-applications/{id}', [AidApplicationController::class, 'destroy']); //!حذف طلب معين
         Route::get('/aid-applications', [AidApplicationController::class, 'index']); //!ارجاع الطلبات مع تصفية حسب الطلب
 
         /* للادمن
-        Route::get('/aid-applications-admin', [AidApplicationController::class, 'adminIndex']); //!ارجاع 
+        Route::get('/aid-applications-admin', [AidApplicationController::class, 'adminIndex']); //!ارجاع
         Route::put('/aid-applications/{id}/status', [AidApplicationController::class, 'updateStatus']); //! تغيير حالة الطلب
         */
 
@@ -106,8 +106,8 @@ Route::middleware('auth:sanctum')->group(function () {
         // Campaigns
         Route::get('/campaigns', [CampaignController::class, 'index']); //!اظهار الحملات بعد التصفية الي بدي ياها
         Route::get('/campaigns/featured', [CampaignController::class, 'featured']); //!برجع الحملات الطارئة اولا ثم الغير طارئة
-        Route::get('/campaigns/categories', [CampaignController::class, 'categories']); //!اطهار تصنيفات حملة 
-        Route::get('/campaigns/{id}', [CampaignController::class, 'show']); //!اطهار حملة 
+        Route::get('/campaigns/categories', [CampaignController::class, 'categories']); //!اطهار تصنيفات حملة
+        Route::get('/campaigns/{id}', [CampaignController::class, 'show']); //!اطهار حملة
         Route::get('/campaigns/{id}/updates', [CampaignController::class, 'updates']); //!جلب جميع أخبار/تطورات حملة معينة
         Route::post('/storeCampaigns', [CampaignController::class, 'store']); //!انشاء حملة (هاد من عندي لاختبار الشغل مافي داعي ينربط)
 
@@ -178,7 +178,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('/{id}/end', [VolunteerTaskController::class, 'endTask']);   //!إنهاء مهمة معينة
         });
         // ✅ التقييمات (جديد)
-        Route::get('/evaluations', [VolunteerTaskController::class, 'evaluations']); //!جلب جميع التقييمات للمتطوع 
+        Route::get('/evaluations', [VolunteerTaskController::class, 'evaluations']); //!جلب جميع التقييمات للمتطوع
 
         // ✅ الشهادات (جديد)
         Route::get('/certificates', [CertificateController::class, 'index']);  //!جلب جميع الشهادات للمتطوع
@@ -200,8 +200,8 @@ Route::middleware('auth:sanctum')->group(function () {
         // المستفيدين المتاحين (للمتبرعين)
         Route::get('/available-beneficiaries', [SponsorshipController::class, 'availableBeneficiaries']); //!جلب المستفيدين المتاحين للكفالة
 
-        Route::get('/', [SponsorshipController::class, 'index']); //!جلب الكفالات 
-        Route::post('/', [SponsorshipController::class, 'store']); //!انشاء كفالة 
+        Route::get('/', [SponsorshipController::class, 'index']); //!جلب الكفالات
+        Route::post('/', [SponsorshipController::class, 'store']); //!انشاء كفالة
         Route::get('/{id}', [SponsorshipController::class, 'show']); //!عرض الكفالات
         Route::put('/{id}', [SponsorshipController::class, 'update']); //!تعديل الكفالة والادمن يمكنه تغيير حالة الكفالة
         Route::delete('/{id}', [SponsorshipController::class, 'destroy']); //!حذف كفالة
@@ -244,10 +244,10 @@ Route::controller(CampaignController::class)->group(function () {
 // ==================== CHAT ROUTES ====================
 Route::prefix('chat')->middleware('auth:sanctum')->group(function () {
     Route::get('/conversations', [ChatController::class, 'conversations']); //!ارجاع المحادثات الموجودة
-    Route::post('/conversations', [ChatController::class, 'createConversation']); //!انشاء دردشة فردية او غروب 
-    Route::post('/conversations/{id}/leave', [ChatController::class, 'leaveConversation']); //! مغادرة المحادثة 
+    Route::post('/conversations', [ChatController::class, 'createConversation']); //!انشاء دردشة فردية او غروب
+    Route::post('/conversations/{id}/leave', [ChatController::class, 'leaveConversation']); //! مغادرة المحادثة
     Route::post('/conversations/{id}/read', [ChatController::class, 'markAsRead']); //! جعل المحادثة مقروءة
-    Route::post('/conversations/{id}/typing', [ChatController::class, 'typing']); //! اظهار اشارة يكتب 
+    Route::post('/conversations/{id}/typing', [ChatController::class, 'typing']); //! اظهار اشارة يكتب
     Route::get('/conversations/{id}/messages', [ChatController::class, 'messages']); //!ارجاع الرسائل في المحادثة
     Route::post('/conversations/{id}/messages', [ChatController::class, 'sendMessage']); //!ارسال رسالة في المحادثة
 });

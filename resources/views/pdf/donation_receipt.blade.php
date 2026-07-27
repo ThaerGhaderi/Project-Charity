@@ -1,8 +1,9 @@
 <!DOCTYPE html>
 <html dir="rtl" lang="ar">
+
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     <title>إيصال التبرع</title>
     <style>
         * {
@@ -10,13 +11,12 @@
             padding: 0;
             box-sizing: border-box;
         }
-
         body {
-            /* نستخدم وزن واحد فقط (Regular) لضمان عرض العربي بشكل صحيح بدون الحاجة لملف Bold */
-            font-family: 'Cairo', 'DejaVu Sans', sans-serif;
+            font-family: 'Arial', sans-serif;
             font-weight: normal;
             background: #f8f7ff;
             padding: 40px;
+            unicode-bidi: embed;
             color: #333;
             direction: rtl;
         }
@@ -135,6 +135,7 @@
         }
     </style>
 </head>
+
 <body>
 
     <div class="container">
@@ -194,4 +195,5 @@
     </div>
 
 </body>
+
 </html>

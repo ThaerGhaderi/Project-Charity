@@ -8,6 +8,7 @@ use App\Http\Requests\DonationRequest as RequestsDonationRequest;
 use App\Http\Requests\Donor\DonationRequest;
 use App\Models\Donation;
 use App\Models\Campaign;
+use App\Models\DonorProfile;
 use App\Models\PaymentTransaction;
 use App\Models\Notification;
 use App\Services\PayerurlService;
@@ -16,6 +17,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Mpdf\Mpdf;
 
 class DonationController extends Controller
 {
@@ -36,14 +38,14 @@ class DonationController extends Controller
     {
         $user = $request->user();
         $donor = $user->donor;
-        
+
         if (!$donor) {
             return response()->json([
                 'success' => false,
                 'message' => 'لم يتم العثور على ملف المتبرع'
             ], 404);
         }
-        
+
         $campaign = Campaign::findOrFail($request->campaign_id);
 
         if ($campaign->status !== 'active') {
@@ -99,7 +101,7 @@ class DonationController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'حدث خطأ أثناء إنشاء التبرع',
@@ -143,14 +145,14 @@ class DonationController extends Controller
 {
     $user = $request->user();
     $donor = $user->donor;
-    
+
     if (!$donor) {
         return response()->json([
             'success' => false,
             'message' => 'لم يتم العثور على ملف المتبرع'
         ], 404);
     }
-    
+
     $campaign = Campaign::findOrFail($request->campaign_id);
 
     if ($campaign->status !== 'active') {
@@ -182,7 +184,7 @@ class DonationController extends Controller
 
         // ✅ استخدام Stripe Checkout Session
         $stripe = new \Stripe\StripeClient(config('services.stripe.secret'));
-        
+
         $checkoutSession = $stripe->checkout->sessions->create([
             'payment_method_types' => ['card'],
             'line_items' => [[
@@ -347,14 +349,14 @@ public function handleStripeWebhook(Request $request)
     {
         $user = $request->user();
         $donor = $user->donor;
-        
+
         if (!$donor) {
             return response()->json([
                 'success' => false,
                 'message' => 'لم يتم العثور على ملف المتبرع'
             ], 404);
         }
-        
+
         $campaign = Campaign::findOrFail($request->campaign_id);
 
         if ($campaign->status !== 'active') {
@@ -430,7 +432,7 @@ public function handleStripeWebhook(Request $request)
 
         } catch (\Exception $e) {
             DB::rollBack();
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'حدث خطأ أثناء إنشاء التبرع',
@@ -447,14 +449,14 @@ public function handleStripeWebhook(Request $request)
     {
         $user = $request->user();
         $donor = $user->donor;
-        
+
         if (!$donor) {
             return response()->json([
                 'success' => false,
                 'message' => 'لم يتم العثور على ملف المتبرع'
             ], 404);
         }
-        
+
         $donation = Donation::where('donor_id', $donor->id)
             ->where('id', $id)
             ->where('payment_gateway', 'payerurl')
@@ -486,23 +488,23 @@ public function handleStripeWebhook(Request $request)
     public function handlePayerurlWebhook(Request $request)
     {
         $payload = $request->all();
-        
+
         Log::info('PayerURL Webhook received', $payload);
-        
+
         $paymentId = $payload['payment_id'] ?? $payload['id'] ?? null;
-        
+
         if (!$paymentId) {
             return response()->json(['error' => 'No payment ID'], 400);
         }
-        
+
         $donation = Donation::where('gateway_payment_id', $paymentId)->first();
-        
+
         if (!$donation) {
             return response()->json(['error' => 'Donation not found'], 404);
         }
-        
+
         $status = $payload['status'] ?? 'pending';
-        
+
         if ($status === 'completed' || $status === 'paid') {
             if ($donation->status !== 'completed') {
                 $donation->update([
@@ -511,14 +513,14 @@ public function handleStripeWebhook(Request $request)
                     'crypto_currency' => $payload['crypto_currency'] ?? null,
                     'crypto_amount' => $payload['crypto_amount'] ?? null,
                 ]);
-                
+
                 $donation->campaign->updateCollectedAmount();
-                
+
                 $donor = $donation->donor;
                 if ($donor) {
                     $donor->addDonation($donation->amount);
                 }
-                
+
                 if ($donor && $donor->user) {
                     Notification::sendPushOnly(
                         $donor->user->id,
@@ -535,7 +537,7 @@ public function handleStripeWebhook(Request $request)
                 'gateway_status' => $status
             ]);
         }
-        
+
         return response()->json(['status' => 'ok'], 200);
     }
 
@@ -547,14 +549,14 @@ public function handleStripeWebhook(Request $request)
     {
         $user = $request->user();
         $donor = $user->donor;
-        
+
         if (!$donor) {
             return response()->json([
                 'success' => false,
                 'message' => 'لم يتم العثور على ملف المتبرع'
             ], 404);
         }
-        
+
         $donation = Donation::where('donor_id', $donor->id)
             ->where('id', $donationId)
             ->firstOrFail();
@@ -564,10 +566,10 @@ public function handleStripeWebhook(Request $request)
 
         if ($donation->gateway_payment_id) {
             $paymentStatus = $this->payerurlService->getPaymentStatus($donation->gateway_payment_id);
-            
+
             if ($paymentStatus['success']) {
                 $status = $paymentStatus['status'];
-                
+
                 if ($status === 'completed') {
                     $donation->update([
                         'status' => 'completed',
@@ -606,14 +608,14 @@ public function handleStripeWebhook(Request $request)
     {
         $user = $request->user();
         $donor = $user->donor;
-        
+
         if (!$donor) {
             return response()->json([
                 'success' => false,
                 'message' => 'لم يتم العثور على ملف المتبرع'
             ], 404);
         }
-        
+
         $donation = Donation::with(['campaign'])
             ->where('donor_id', $donor->id)
             ->where('id', $id)
@@ -643,14 +645,14 @@ public function handleStripeWebhook(Request $request)
     {
         $user = $request->user();
         $donor = $user->donor;
-        
+
         if (!$donor) {
             return response()->json([
                 'success' => false,
                 'message' => 'لم يتم العثور على ملف المتبرع'
             ], 404);
         }
-        
+
         $donations = Donation::with(['campaign'])
             ->where('donor_id', $donor->id)
             ->orderBy('donated_at', 'desc')
@@ -670,14 +672,14 @@ public function handleStripeWebhook(Request $request)
     {
         $user = $request->user();
         $donor = $user->donor;
-        
+
         if (!$donor) {
             return response()->json([
                 'success' => false,
                 'message' => 'لم يتم العثور على ملف المتبرع'
             ], 404);
         }
-        
+
         $monthlyTrend = Donation::where('donor_id', $donor->id)
             ->where('status', 'completed')
             ->where('donated_at', '>=', now()->subMonths(6))
@@ -693,7 +695,7 @@ public function handleStripeWebhook(Request $request)
                 return ['month' => $month, 'total' => (float) $total];
             })
             ->values();
-        
+
         $stats = [
             'total_donations' => Donation::where('donor_id', $donor->id)
                 ->where('status', 'completed')
@@ -726,14 +728,14 @@ public function handleStripeWebhook(Request $request)
     {
         $user = $request->user();
         $donor = $user->donor;
-        
+
         if (!$donor) {
             return response()->json([
                 'success' => false,
                 'message' => 'لم يتم العثور على ملف المتبرع'
             ], 404);
         }
-        
+
         $donation = Donation::with(['campaign', 'paymentTransaction'])
             ->where('donor_id', $donor->id)
             ->where('id', $id)
@@ -750,54 +752,38 @@ public function handleStripeWebhook(Request $request)
      * GET /api/donor/donations/{id}/pdf
      */
     public function downloadReceiptPdf($id, Request $request)
-    {
-        $user = $request->user();
-        $donor = $user->donor;
-        
-        if (!$donor) {
-            return response()->json([
-                'success' => false,
-                'message' => 'لم يتم العثور على ملف المتبرع'
-            ], 404);
-        }
-        
+    {$user = $request->user();
+        $donorProfile = DonorProfile::where('user_id', $user->id)->firstOrFail();
+
         $donation = Donation::with(['campaign', 'donor.user'])
-            ->where('donor_id', $donor->id)
+            ->where('donor_id', $donorProfile->id)
             ->where('id', $id)
             ->firstOrFail();
 
         $data = [
-            'receipt_number' => 'DON-' . str_pad($donation->id, 8, '0', STR_PAD_LEFT),
-            'campaign_title' => $donation->campaign->title,
-            'campaign_category' => $donation->campaign->category ?? 'عامة',
-            'amount' => number_format($donation->amount, 2),
-            'currency' => $donation->currency,
-            'payment_method' => $this->getPaymentMethodName($donation->payment_method),
-            'status' => $this->getStatusName($donation->status),
-            'date' => $donation->donated_at->format('Y-m-d H:i:s'),
-            'donor_name' => $donation->is_anonymous ? 'متبرع مجهول' : ($donation->donor->user->name ?? 'غير محدد'),
-            'is_anonymous' => $donation->is_anonymous,
-            'campaign_id' => $donation->campaign_id,
-            'donation_id' => $donation->id,
+        'receipt_number'   => 'DON-' . str_pad($donation->id, 8, '0', STR_PAD_LEFT),
+        'campaign_title'   => $donation->campaign->title,
+        'campaign_category'=> $donation->campaign->category ?? 'عامة',
+        'amount'           => number_format($donation->amount, 2),
+        'currency'         => $donation->currency,
+        'payment_method'   => $this->getPaymentMethodName($donation->payment_method),
+        'status'           => $this->getStatusName($donation->status),
+        'date'             => $donation->donated_at->format('Y-m-d H:i:s'),
+        'donor_name'       => $donation->is_anonymous ? 'متبرع مجهول' : $donation->user->name,
+        'is_anonymous'     => $donation->is_anonymous,
+        'campaign_id'      => $donation->campaign_id,
+        'donation_id'      => $donation->id,
         ];
-
-        try {
-            $pdf = Pdf::loadView('pdf.donation_receipt', $data);
-            $pdf->setPaper('A4', 'portrait');
-            $pdf->setOptions([
-                'defaultFont' => 'dejavusans',
-                'isHtml5ParserEnabled' => true,
-                'isRemoteEnabled' => true,
-            ]);
-            
-            return $pdf->download("إيصال_تبرع_{$data['receipt_number']}.pdf");
-            
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'حدث خطأ في إنشاء PDF: ' . $e->getMessage()
-            ], 500);
-        }
+    $html = view('pdf.donation_receipt', $data)->render();
+    $mpdf = new Mpdf([
+        'mode'        => 'utf-8',
+        'format'      => 'A4',
+        'orientation' => 'P',
+        'direction'   => 'rtl',
+    ]);
+    $mpdf->WriteHTML($html);
+        // $pdf = Pdf::loadView('pdf.donation_receipt', $data)->setOption('is_unicode', true)->setOption('enable_html5_parser', true);
+    return response($mpdf->Output('receipt.pdf', 'S'))->header('Content-Type', 'application/pdf');
     }
 
     /**
@@ -817,7 +803,7 @@ public function handleStripeWebhook(Request $request)
             'payerurl' => 'PayerURL',
             'local' => 'دفع مباشر',
         ];
-        
+
         return $methods[$method] ?? $method;
     }
 
@@ -833,7 +819,7 @@ public function handleStripeWebhook(Request $request)
             'refunded' => 'مسترد',
             'cancelled' => 'ملغي',
         ];
-        
+
         return $statuses[$status] ?? $status;
     }
 }
