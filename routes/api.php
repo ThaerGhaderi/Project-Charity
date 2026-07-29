@@ -237,6 +237,8 @@ Route::controller(CampaignController::class)->group(function () {
     Route::post('/campaigns/store', 'store');
     Route::get('/campaigns/show/{id}', 'showCampaign');
     Route::put('/campaigns/update/{id}', 'update');
+        Route::put('/campaigns/status/{id}','updateStatus');
+
     Route::delete('/campaigns/delete/{id}', 'destroy');
 });
 });

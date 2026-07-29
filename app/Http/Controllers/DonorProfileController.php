@@ -202,7 +202,7 @@ class DonorProfileController extends Controller
                     $profileUpdates['personal_photo'] = $request->file('personal_photo')->store('profiles', 'public');
                 }
 
-                if (isset($validated['bio'])) {
+                if (array_key_exists('bio', $validated)) {
                     $profileUpdates['bio'] = $validated['bio'];
                 }
 
@@ -222,7 +222,7 @@ class DonorProfileController extends Controller
                     $donorUpdates['is_anonymous'] = $validated['is_anonymous'];
                 }
 
-                if (isset($validated['bio'])) {
+                if (array_key_exists('bio', $validated)) {
                     $donorUpdates['bio'] = $validated['bio'];
                 }
 

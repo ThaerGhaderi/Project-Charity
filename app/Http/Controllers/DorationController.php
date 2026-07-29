@@ -70,7 +70,7 @@ public function export()
             [
                 'donor_type'   => $request->donor_type ?? 'فردي',
                 'is_anonymous' => $request->is_anonymous ?? false,
-                'bio'          => null,
+                'bio'          => " ",
             ]
         );
         $doration = $donorProfile->dorations()->create([
@@ -136,7 +136,7 @@ public function update(Request $request, $id)
     if ($request->has('status')) {
         $doration->status = $request->status;
         $doration->save();
-        
+
     }
 
     // نرجع البيانات للرياكت

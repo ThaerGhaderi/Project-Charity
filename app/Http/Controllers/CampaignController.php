@@ -62,7 +62,7 @@ class CampaignController extends Controller
         if ($request->has('status')) {
             $query->where('status', $request->status);
         } else {
-            $query->whereIn('status', ['active', 'completed']);
+            $query->whereIn('status', ['نشطة', 'مكتملة']);
         }
 
         // Filter by category
@@ -110,10 +110,10 @@ class CampaignController extends Controller
     {
         $query = Campaign::query()
             ->withSum(['donations as achieved_amount' => function ($q) {
-                $q->where('status', 'completed');
+                $q->where('status', 'مكتملة');
             }], 'amount')
             ->withCount(['donations as donors_count' => function ($q) {
-                $q->where('status', 'completed');
+                $q->where('status', 'مكتملة');
             }]);
 
         if ($request->has('category')) {
@@ -140,7 +140,7 @@ class CampaignController extends Controller
      */
     public function featured(Request $request)
     {
-        $campaigns = Campaign::where('status', 'active')
+        $campaigns = Campaign::where('status', 'نشطة')
             ->orderBy('is_emergency', 'desc')
             ->orderBy('created_at', 'desc')
             ->limit(5)
@@ -206,7 +206,7 @@ class CampaignController extends Controller
     public function updates($id)
     {
         $campaign = Campaign::findOrFail($id);
-        
+
         $updates = $campaign->updates()
             ->with('creator')
             ->orderBy('created_at', 'desc')
@@ -229,16 +229,16 @@ class CampaignController extends Controller
             'أطفال', 'بيئة', 'ثقافة', 'رياضة',
             'تكنولوجيا', 'تنمية مجتمعية'
         ];
-        
+
         $categoriesFromCampaigns = Campaign::select('category')
             ->distinct()
             ->whereNotNull('category')
             ->pluck('category')
             ->toArray();
-        
+
         $mergedCategories = array_unique(array_merge($allCategories, $categoriesFromCampaigns));
         sort($mergedCategories);
-        
+
         return response()->json([
             'success' => true,
             'data' => array_values($mergedCategories)
@@ -282,10 +282,10 @@ class CampaignController extends Controller
         $validated['status'] = 'draft';
         $validated['created_by'] = Auth::id();
         $validated['short_url'] = Str::random(8);
-        
+
         try {
             $campaign = Campaign::create($validated);
-            
+
             Notification::sendPushOnly(
                 Auth::id(),
                 '📢 تم إنشاء حملة جديدة',
@@ -293,18 +293,18 @@ class CampaignController extends Controller
                 'campaign',
                 ['campaign_id' => $campaign->id]
             );
-            
+
             $volunteerIds = $request->volunteer_ids ?? [];
             $this->createVolunteerTasksForCampaign($campaign, $volunteerIds);
-            
+
             $campaign->load('volunteerTasks');
-            
+
             return response()->json([
                 'success' => true,
                 'message' => 'تم إنشاء الحملة بنجاح. وهي قيد المراجعة.',
                 'data' => $campaign
             ], 201);
-            
+
         } catch (\Exception $e) {
             Log::error('Campaign creation failed: ' . $e->getMessage());
             return response()->json([
@@ -350,7 +350,7 @@ class CampaignController extends Controller
             'start_date' => 'nullable|date|after_or_equal:today',
             'end_date' => 'nullable|date|after:start_date',
             'location' => 'nullable|string|max:255',
-           
+            'status' => 'sometimes|in:draft,review,active,closed,completed,cancelled,متوقفة,نشطة,مغلقة,مكتملة,ملغية',
         ]);
 
         $campaign->update($validated);
@@ -360,8 +360,7 @@ class CampaignController extends Controller
 
     /**
      * ✅ من الملف الأول: Update campaign status
-     */
-    public function updateStatus(Request $request, $id)
+     */ public function updateStatus(Request $request, $id)
     {
         if (!Auth::check()) {
             return response()->json([
@@ -374,7 +373,7 @@ class CampaignController extends Controller
         $user = Auth::user();
         $isAdmin = $user->role === 'admin' || $user->role === 'Admin';
         $isCreator = $campaign->created_by == $user->id;
-        
+
         if (!$isAdmin && !$isCreator) {
             return response()->json([
                 'success' => false,
@@ -383,7 +382,7 @@ class CampaignController extends Controller
         }
 
         $request->validate([
-            'status' => 'required|in:draft,review,active,closed,completed,cancelled',
+            'status' => 'required|in:draft,review,active,closed,completed,cancelled,متوقفة,نشطة,مغلقة,مكتملة,ملغية',
             'reason' => 'required_if:status,cancelled|nullable|string|max:500'
         ]);
 
@@ -391,11 +390,11 @@ class CampaignController extends Controller
         $newStatus = $request->status;
 
         $campaign->status = $newStatus;
-        
+
         if ($newStatus === 'cancelled') {
             $campaign->cancelled_reason = $request->reason;
         }
-        
+
         if ($newStatus === 'completed') {
             if ($campaign->collected_amount < $campaign->goal_amount) {
                 return response()->json([
@@ -404,13 +403,13 @@ class CampaignController extends Controller
                 ], 400);
             }
         }
-        
+
         if ($newStatus === 'active') {
             if (!$campaign->start_date || $campaign->start_date > now()) {
                 $campaign->start_date = now();
             }
         }
-        
+
         $campaign->save();
 
         $this->sendStatusChangeNotifications($campaign, $oldStatus, $newStatus);
@@ -451,24 +450,24 @@ class CampaignController extends Controller
     public function checkAndUpdateStatus($id)
     {
         $campaign = Campaign::findOrFail($id);
-        
+
         $oldStatus = $campaign->status;
         $autoUpdated = false;
-        
-        if ($campaign->status === 'active' && $campaign->collected_amount >= $campaign->goal_amount) {
-            $campaign->status = 'completed';
+
+        if ($campaign->status === 'نشطة' && $campaign->collected_amount >= $campaign->goal_amount) {
+            $campaign->status = 'مكتملة';
             $campaign->save();
             $autoUpdated = true;
-            $this->sendStatusChangeNotifications($campaign, $oldStatus, 'completed');
+            $this->sendStatusChangeNotifications($campaign, $oldStatus, 'مكتملة');
         }
-        
-        if ($campaign->status === 'active' && $campaign->end_date && $campaign->end_date < now()) {
-            $campaign->status = 'closed';
+
+        if ($campaign->status === 'نشطة' && $campaign->end_date && $campaign->end_date < now()) {
+            $campaign->status = 'مغلقة';
             $campaign->save();
             $autoUpdated = true;
-            $this->sendStatusChangeNotifications($campaign, $oldStatus, 'closed');
+            $this->sendStatusChangeNotifications($campaign, $oldStatus, 'مغلقة');
         }
-        
+
         return response()->json([
             'success' => true,
             'message' => $autoUpdated ? 'تم تحديث حالة الحملة تلقائياً' : 'الحالة كما هي',
@@ -492,10 +491,10 @@ class CampaignController extends Controller
             ->get()
             ->pluck('user')
             ->unique('id');
-        
+
         $title = $this->getNotificationTitle($campaign->title, $newStatus);
         $body = $this->getNotificationBody($campaign, $oldStatus, $newStatus);
-        
+
         foreach ($donors as $donor) {
             if ($donor && $donor->id) {
                 Notification::sendPushOnly(
@@ -507,7 +506,7 @@ class CampaignController extends Controller
                 );
             }
         }
-        
+
         $creator = User::find($campaign->created_by);
         if ($creator) {
             Notification::sendPushOnly(
@@ -526,10 +525,11 @@ class CampaignController extends Controller
     private function getNotificationTitle($campaignTitle, $status)
     {
         return match ($status) {
-            'active' => " حملة {$campaignTitle} أصبحت نشطة",
-            'completed' => " حملة {$campaignTitle} حققت هدفها!",
-            'cancelled' => " حملة {$campaignTitle} تم إلغاؤها",
-            'closed' => " حملة {$campaignTitle} تم إغلاقها",
+            'نشطة' => " حملة {$campaignTitle} أصبحت نشطة",
+            'متوقفة' => " حملة {$campaignTitle} متوقفة",
+            'مكتملة' => " حملة {$campaignTitle} حققت هدفها!",
+            'ملغية' => " حملة {$campaignTitle} تم إلغاؤها",
+            'مغلقة' => " حملة {$campaignTitle} تم إغلاقها",
             'review' => " حملة {$campaignTitle} قيد المراجعة",
             default => " تحديث حالة حملة {$campaignTitle}"
         };
@@ -543,12 +543,13 @@ class CampaignController extends Controller
         $progress = $campaign->progress_percentage;
         $collected = number_format($campaign->collected_amount, 2);
         $goal = number_format($campaign->goal_amount, 2);
-        
+
         return match ($newStatus) {
-            'active' => "تم تفعيل حملة {$campaign->title}. يمكنك الآن التبرع لدعم هذا المشروع.",
-            'completed' => "الحمد لله! حملة {$campaign->title} حققت هدفها البالغ {$goal} \$ بنسبة {$progress}% من {$collected} \$ متبرع. شكراً لدعمكم!",
-            'cancelled' => "تم إلغاء حملة {$campaign->title}. سيتم استرداد التبرعات خلال 14 يوماً.",
-            'closed' => "تم إغلاق حملة {$campaign->title} بعد تحقيق {$progress}% من الهدف ({$collected} \$ من {$goal} \$).",
+            'نشطة' => "تم تفعيل حملة {$campaign->title}. يمكنك الآن التبرع لدعم هذا المشروع.",
+            'متوقفة' => "تم إيقاف حملة {$campaign->title} مؤقتاً.",
+            'مكتملة' => "الحمد لله! حملة {$campaign->title} حققت هدفها البالغ {$goal} \$ بنسبة {$progress}% من {$collected} \$ متبرع. شكراً لدعمكم!",
+            'ملغية' => "تم إلغاء حملة {$campaign->title}. سيتم استرداد التبرعات خلال 14 يوماً.",
+            'مغلقة' => "تم إغلاق حملة {$campaign->title} بعد تحقيق {$progress}% من الهدف ({$collected} \$ من {$goal} \$).",
             default => "تم تحديث حالة حملة {$campaign->title} إلى {$newStatus}"
         };
     }
@@ -559,10 +560,11 @@ class CampaignController extends Controller
     private function getStatusChangeMessage($status)
     {
         return match ($status) {
-            'active' => 'تم تفعيل الحملة بنجاح وهي الآن متاحة للتبرع',
-            'completed' => 'تم إكمال الحملة بنجاح، شكراً لجميع المتبرعين',
-            'cancelled' => 'تم إلغاء الحملة، سيتم إشعار المتبرعين',
-            'closed' => 'تم إغلاق الحملة',
+            'نشطة' => 'تم تفعيل الحملة بنجاح وهي الآن متاحة للتبرع',
+            'متوقفة' => 'تم إيقاف الحملة بنجاح',
+            'مكتملة' => 'تم إكمال الحملة بنجاح، شكراً لجميع المتبرعين',
+            'ملغية' => 'تم إلغاء الحملة، سيتم إشعار المتبرعين',
+            'مغلقة' => 'تم إغلاق الحملة',
             'review' => 'تم إرسال الحملة للمراجعة',
             'draft' => 'تم حفظ الحملة كمسودة',
             default => 'تم تحديث حالة الحملة بنجاح'
@@ -603,13 +605,13 @@ class CampaignController extends Controller
 
         if (!empty($volunteerIds)) {
             $volunteers = VolunterProfile::whereIn('id', $volunteerIds)->get();
-            
+
             if ($volunteers->isEmpty()) {
                 $volunteers = VolunterProfile::limit(1)->get();
             }
         } else {
             $volunteers = VolunterProfile::where('status', 'متاح')->get();
-            
+
             if ($volunteers->isEmpty()) {
                 $user = User::create([
                     'name' => 'متطوع افتراضي',
@@ -619,7 +621,7 @@ class CampaignController extends Controller
                     'profile_completed' => true,
                     'email_verified_at' => now(),
                 ]);
-                
+
                 $volunteer = VolunterProfile::create([
                     'user_id' => $user->id,
                     'Favorite_period' => 'صباحاً',
@@ -628,7 +630,7 @@ class CampaignController extends Controller
                     'status' => 'متاح',
                     'total_hours' => 0,
                 ]);
-                
+
                 $volunteers = collect([$volunteer]);
             }
         }
@@ -653,10 +655,10 @@ class CampaignController extends Controller
 
         $volunteerIndex = 0;
         $volunteerCount = $volunteers->count();
-        
+
         foreach ($tasks as $taskData) {
             $volunteer = $volunteers[$volunteerIndex % $volunteerCount];
-            
+
             VolunteerTask::create([
                 'campaign_id' => $campaign->id,
                 'volunteer_id' => $volunteer->id,
@@ -667,7 +669,7 @@ class CampaignController extends Controller
                 'supervisor_id' => $supervisorId,
                 'expected_end_time' => now()->addDays(7),
             ]);
-            
+
             $volunteerIndex++;
         }
     }
