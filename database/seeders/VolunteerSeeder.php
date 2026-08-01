@@ -26,7 +26,7 @@ class VolunteerSeeder extends Seeder
 
         $this->command->info("👤 جاري إنشاء {$numberOfVolunteers} متطوع...");
 
-        $statuses = ['مشغول', 'متاح', 'غير متاح'];
+        $statuses = ['منشغل', 'متاح', 'غير متاح'];
         $periods = ['صباحاً', 'ظهراً', 'مساءً'];
         $commitmentTypes = ['منتظم', 'مرة بمرة'];
         $educationLevels = ['ثانوية عامة', 'بكالوريوس', 'ماستر', 'دكتوراة', 'معهد'];
