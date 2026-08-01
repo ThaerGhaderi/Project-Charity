@@ -62,7 +62,7 @@ class CampaignController extends Controller
         if ($request->has('status')) {
             $query->where('status', $request->status);
         } else {
-            $query->whereIn('status', ['نشطة', 'مكتملة']);
+            $query->whereIn('status', ['active', 'completed']);
         }
 
         // Filter by category

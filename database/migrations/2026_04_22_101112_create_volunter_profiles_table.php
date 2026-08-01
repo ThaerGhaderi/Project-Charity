@@ -15,14 +15,14 @@ return new class extends Migration
             $table->string('previous_work_place')->nullable();
             $table->integer('experience_years')->default(0)->nullable();
             $table->boolean('car')->default(0);
-            $table->enum('status',['مشغول','متاح','غير متاح']);
+            $table->enum('status',['منشغل','متاح','غير متاح']);
             $table->text('bio')->nullable();
             $table->enum('Commitment_type',['منتظم','مرة بمرة']);
             $table->enum('Educational_level',['ثانوية عامة','بكالوريوس','ماستر','دكتوراة','معهد']);
             $table->string('facebook')->nullable();
             $table->string('linkedin')->nullable();
-            $table->integer('points')->default(0);  
-            $table->integer('rank')->nullable();  
+            $table->integer('points')->default(0);
+            $table->integer('rank')->nullable();
             $table->timestamps();
         });
     }

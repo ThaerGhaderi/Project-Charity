@@ -18,15 +18,14 @@ class VolunteerTaskController extends Controller
 {
     /**
      * عرض جميع مهام المتطوع (الخاصة به فقط)
-     * 
+     *
      * @api {get} /api/volunteer/tasks Get My Tasks
      * @apiHeader Authorization Bearer {token}
      */
     public function index(Request $request)
     {
         $user = $request->user();
-        $volunteer = $user->volunteer;
-
+$volunteer = $user->volunterProfile;
         if (!$volunteer) {
             return response()->json([
                 'code' => '404',
@@ -93,7 +92,7 @@ class VolunteerTaskController extends Controller
             $task->source_type = $task->source_type;
             $task->source_name = $task->source_name;
             $task->beneficiary_name = $task->beneficiary_name;
-            
+
             if ($task->campaign) {
                 $task->campaign_title = $task->campaign->title;
                 $task->campaign_progress = $task->campaign->progress_percentage;
@@ -105,13 +104,13 @@ class VolunteerTaskController extends Controller
                 $task->aid_status = $task->aidApplication->status;
                 $task->aid_is_urgent = $task->aidApplication->is_urgent;
             }
-            
+
             // ✅ معلومات الزيارة
             if ($task->visit) {
                 $task->visit_date = $task->visit->formatted_date;
                 $task->visit_time = $task->visit->formatted_time;
             }
-            
+
             return $task;
         });
 
@@ -146,7 +145,7 @@ class VolunteerTaskController extends Controller
 
     /**
      * ✅ عرض المهام المفتوحة للجميع (بدون متطوع محدد)
-     * 
+     *
      * @api {get} /api/volunteer/tasks/available Get Available Tasks
      * @apiHeader Authorization Bearer {token}
      */
@@ -227,7 +226,7 @@ class VolunteerTaskController extends Controller
             $task->source_name = $task->source_name;
             $task->beneficiary_name = $task->beneficiary_name;
             $task->is_available = true;
-            
+
             if ($task->visit) {
                 $task->visit_date = $task->visit->formatted_date;
                 $task->visit_time = $task->visit->formatted_time;
@@ -240,7 +239,7 @@ class VolunteerTaskController extends Controller
                 $task->aid_is_urgent = $task->aidApplication->is_urgent;
                 $task->aid_amount = $task->aidApplication->amount_requested;
             }
-            
+
             return $task;
         });
 
@@ -272,14 +271,14 @@ class VolunteerTaskController extends Controller
 
     /**
      * عرض تفاصيل مهمة معينة
-     * 
+     *
      * @api {get} /api/volunteer/tasks/{id} Get Task Details
      * @apiHeader Authorization Bearer {token}
      */
     public function show($id, Request $request)
     {
         $user = $request->user();
-        $volunteer = $user->volunteer;
+$volunteer = $user->volunterProfile;
 
         if (!$volunteer) {
             return response()->json([
@@ -290,9 +289,18 @@ class VolunteerTaskController extends Controller
         }
 
         // ✅ البحث عن المهمة (بدون شرط volunteer_id للسماح برؤية المهام المفتوحة)
-        $task = VolunteerTask::where('id', $id)
-            ->with(['supervisor', 'checkIns', 'beneficiary', 'aidApplication', 'visit', 'campaign'])
-            ->firstOrFail();
+     $task = VolunteerTask::where('id', $id)
+        ->with(['supervisor', 'checkIns', 'beneficiary', 'aidApplication', 'visit', 'campaign'])
+        ->first();
+
+    if (!$task) {
+        return response()->json([
+            'code' => '404',
+            'success' => false,
+            'message' => 'المهمة غير موجودة',
+        ], 404);
+    }
+
 
         // ✅ التحقق من أن المتطوع لديه صلاحية (مهمته أو مفتوحة)
         if ($task->volunteer_id && $task->volunteer_id != $volunteer->id) {
@@ -356,15 +364,14 @@ class VolunteerTaskController extends Controller
 
     /**
      * بدء المهمة (تسجيل الحضور) - يدعم المهام المفتوحة
-     * 
+     *
      * @api {post} /api/volunteer/tasks/{id}/start Start Task
      * @apiHeader Authorization Bearer {token}
      */
     public function startTask($id, Request $request)
     {
         $user = $request->user();
-        $volunteer = $user->volunteer;
-
+$volunteer = $user->volunterProfile;
         if (!$volunteer) {
             return response()->json([
                 'code' => '404',
@@ -375,7 +382,7 @@ class VolunteerTaskController extends Controller
 
         // ✅ البحث عن المهمة (بدون شرط volunteer_id)
         $task = VolunteerTask::find($id);
-        
+
         if (!$task) {
             return response()->json([
                 'code' => '404',
@@ -468,14 +475,14 @@ class VolunteerTaskController extends Controller
 
     /**
      * إنهاء المهمة (تسجيل الانصراف)
-     * 
+     *
      * @api {post} /api/volunteer/tasks/{id}/end End Task
      * @apiHeader Authorization Bearer {token}
      */
     public function endTask($id, Request $request)
     {
         $user = $request->user();
-        $volunteer = $user->volunteer;
+        $volunteer = $user->volunterProfile;
 
         if (!$volunteer) {
             return response()->json([
@@ -485,9 +492,16 @@ class VolunteerTaskController extends Controller
             ], 404);
         }
 
-        $task = VolunteerTask::where('volunteer_id', $volunteer->id)
-            ->where('id', $id)
-            ->firstOrFail();
+     $task = VolunteerTask::find($id);
+
+if (!$task) {
+    return response()->json([
+        'code' => '404',
+        'success' => false,
+        'message' => 'المهمة غير موجودة',
+    ], 404);
+}
+
 
         if ($task->status !== 'قيد التنفيذ') {
             return response()->json([
@@ -546,7 +560,7 @@ class VolunteerTaskController extends Controller
                     'status' => 'completed',
                     'completed_at' => now(),
                 ]);
-                
+
                 // ✅ إشعار للمستفيد صاحب طلب المساعدة
                 Notification::sendPushOnly(
                     $task->aidApplication->user_id,
@@ -607,15 +621,14 @@ class VolunteerTaskController extends Controller
 
     /**
      * الحصول على المهمة الحالية للمتطوع
-     * 
+     *
      * @api {get} /api/volunteer/tasks/current Get Current Task
      * @apiHeader Authorization Bearer {token}
      */
     public function currentTask(Request $request)
     {
         $user = $request->user();
-        $volunteer = $user->volunteer;
-
+$volunteer = $user->volunterProfile;
         if (!$volunteer) {
             return response()->json([
                 'code' => '404',
@@ -655,15 +668,14 @@ class VolunteerTaskController extends Controller
 
     /**
      * الحصول على تقييمات المتطوع
-     * 
+     *
      * @api {get} /api/volunteer/evaluations Get Evaluations
      * @apiHeader Authorization Bearer {token}
      */
     public function evaluations(Request $request)
     {
         $user = $request->user();
-        $volunteer = $user->volunteer;
-
+$volunteer = $user->volunterProfile;
         if (!$volunteer) {
             return response()->json([
                 'code' => '404',
@@ -706,8 +718,7 @@ class VolunteerTaskController extends Controller
     public function statistics(Request $request)
     {
         $user = $request->user();
-        $volunteer = $user->volunteer;
-
+$volunteer = $user->volunterProfile;
         if (!$volunteer) {
             return response()->json([
                 'code' => '404',
@@ -762,7 +773,7 @@ class VolunteerTaskController extends Controller
     public function points(Request $request)
     {
         $user = $request->user();
-        $volunteer = $user->volunteer;
+        $volunteer = $user->volunterProfile;
 
         if (!$volunteer) {
             return response()->json([
@@ -800,8 +811,7 @@ class VolunteerTaskController extends Controller
     public function leaderboard(Request $request)
     {
         $user = $request->user();
-        $volunteer = $user->volunteer;
-
+$volunteer = $user->volunterProfile;
         if (!$volunteer) {
             return response()->json([
                 'code' => '404',
@@ -847,19 +857,19 @@ class VolunteerTaskController extends Controller
     private function updateCertificates($volunteer)
     {
         $certificates = VolunteerCertificate::where('volunteer_id', $volunteer->id)->get();
-        
+
         foreach ($certificates as $cert) {
             $cert->update([
                 'hours_completed' => min($cert->hours_required, $volunteer->total_hours),
             ]);
-            
+
             if ($cert->hours_completed >= $cert->hours_required && !$cert->issued_at) {
                 $cert->update([
                     'issued_at' => now(),
                     'certificate_number' => 'CERT-' . date('Ymd') . '-' . str_pad($cert->id, 4, '0', STR_PAD_LEFT),
                     'is_active' => true,
                 ]);
-                
+
                 $user = $volunteer->user;
                 if ($user) {
                     Notification::sendPushOnly(
@@ -913,7 +923,7 @@ class VolunteerTaskController extends Controller
     {
         $points = $volunteer->points ?? 0;
         $badges = [];
-        
+
         if ($points >= 500) {
             $badges[] = ['name' => 'نشط', 'icon' => '🔥', 'description' => '500+ نقطة'];
         }
@@ -929,7 +939,7 @@ class VolunteerTaskController extends Controller
         if ($points >= 5000) {
             $badges[] = ['name' => 'نشط جدا', 'icon' => '🔥🔥', 'description' => '5000+ نقطة'];
         }
-        
+
         foreach ($badges as $badgeData) {
             VolunteerBadge::firstOrCreate([
                 'volunteer_id' => $volunteer->id,

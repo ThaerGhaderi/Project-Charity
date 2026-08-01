@@ -6,16 +6,20 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\VolunteerProfileRequest;
 use App\Models\VolunteerCertificate;
 use App\Models\Profile;
+use App\Models\Skill;
+use App\Models\User;
 use App\Models\VolunterProfile;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 class VolunterProfileController extends Controller
 {
     public function completeProfile(VolunteerProfileRequest $request)
     {
         $user = $request->user();
-        
+
         if (!$user->hasVerifiedEmail()) {
             return response()->json([
                 'code' => 'EMAIL_NOT_VERIFIED',
@@ -23,7 +27,7 @@ class VolunterProfileController extends Controller
                 'message' => 'Please verify your email first using OTP.',
             ], 403);
         }
-        
+
         if ($user->role !== 'volunteer') {
             return response()->json([
                 'code' => 'INVALID_ROLE',
@@ -31,7 +35,7 @@ class VolunterProfileController extends Controller
                 'message' => 'Your role is not Volunteer.',
             ], 403);
         }
-        
+
         if ($user->volunteer) {
             return response()->json([
                 'code' => 'PROFILE_ALREADY_EXISTS',
@@ -53,7 +57,7 @@ class VolunterProfileController extends Controller
                     ];
                 }
             }
-            
+
             if ($request->hasFile('Personal_photo')) {
                 $personalPhotoPath = $request->file('Personal_photo')->store('profiles', 'public');
             }
@@ -62,7 +66,7 @@ class VolunterProfileController extends Controller
             if ($request->hasFile('photo_id')) {
                 $photoIdPath = $request->file('photo_id')->store('photo_ids', 'public');
             }
-            
+
             $result = DB::transaction(function () use ($user, $validated, $personalPhotoPath, $photoIdPath, $certificatePaths) {
 
                 $profile = Profile::create([
@@ -74,7 +78,7 @@ class VolunterProfileController extends Controller
                     'gender'         => $validated['gender'],
                     'Personal_photo' => $personalPhotoPath ?? null,
                 ]);
-                
+
                 $volunteer = VolunterProfile::create([
                     'user_id'              => $user->id,
                     'Favorite_period'      => $validated['Favorite_period'],
@@ -90,7 +94,7 @@ class VolunterProfileController extends Controller
                     'total_hours'          => 0,
                     'status'               => 'متاح',
                 ]);
-                
+
                 foreach ($certificatePaths as $cert) {
                     VolunteerCertificate::create([
                         'volunteer_id' => $volunteer->id,
@@ -101,7 +105,7 @@ class VolunterProfileController extends Controller
                         'is_active' => true,
                     ]);
                 }
-                
+
                 $volunteer->domains()->sync($validated['domain_ids']);
                 $volunteer->days()->sync($validated['day_ids']);
                 $volunteer->categories()->sync($validated['category_ids']);
@@ -115,7 +119,7 @@ class VolunterProfileController extends Controller
     ]);
                 return ['profile' => $profile, 'volunteer' => $volunteer];
             });
-            
+
             return response()->json([
                 'code'    => '201',
                 'success' => true,
@@ -139,4 +143,198 @@ class VolunterProfileController extends Controller
             ], 500);
         }
     }
+public function getVolunteers(Request $request)
+{
+    $volunteers = User::with([
+        'profile.city',
+        'volunterProfile.skills'
+    ])
+        ->where('role', 'volunteer')
+        ->latest()
+        ->get();
+
+    return response()->json([
+        'success' => true,
+        'data' => $volunteers->map(function ($user) {
+            return [
+                'id'          => $user->id,
+                'name'        => $user->name,
+                'city'        => $user->profile?->city?->name,
+                'city_id'     => $user->profile?->city_id,
+                'phone'       => $user->profile?->phone,
+                'skills'      => $user->volunterProfile?->skills?->pluck('name')->values(),
+                'total_hours' => $user->volunterProfile?->total_hours ?? 0,
+                'status'      => $user->volunterProfile?->status,
+                'photo'       => $user->profile?->Personal_photo
+                    ? asset('storage/' . $user->profile->Personal_photo)
+                    : null,
+            ];
+        })
+    ]);
+}
+public function store(Request $request)
+{
+    $validated = $request->validate([
+        'name'     => 'required|string|max:255',
+        'phone'    => 'required|string|unique:profiles,phone',
+        'city'     => 'required|exists:cities,id',
+        'status'   => 'required|in:منشغل,متاح,غير متاح',
+        'skills'   => 'nullable|array',
+        'skills.*' => 'exists:skills,id',
+        'total_hours' => 'nullable|integer|min:0',
+    ]);
+
+    $volunteerProfile = DB::transaction(function () use ($validated) {
+
+        $tempPassword = Str::random(10);
+        $email = 'vol_' . Str::random(6) . '@placeholder.local';
+
+        $user = User::create([
+            'name'      => $validated['name'],
+            'email'     => $email,
+            'password'  => Hash::make($tempPassword),
+            'role'      => 'volunteer',
+            'is_active' => true,
+        ]);
+
+        $user->profile()->create([
+            'city_id' => $validated['city'],
+            'phone'   => $validated['phone'],
+        ]);
+
+        $volunteerProfile = $user->volunterProfile()->create([
+            'status'            => $validated['status'],
+            'Favorite_period'   => 'صباحاً',
+            'Commitment_type'   => 'مرة بمرة',
+            'Educational_level' => 'بكالوريوس',
+            'total_hours'       => $validated['total_hours']
+        ]);
+
+        if (!empty($validated['skills'])) {
+            $volunteerProfile->skills()->sync($validated['skills']); // ✅ مباشرة
+        }
+
+        return $volunteerProfile;
+    });
+
+    return response()->json([
+        'message' => 'تمت إضافة المتطوع بنجاح',
+        'data' => [
+        'id'     => $volunteerProfile->user_id, // ✅ عدّلها لتكون user_id وليس volunterProfile->id
+            'name'   => $volunteerProfile->user->name,
+            'phone'  => $volunteerProfile->user->profile->phone,
+            'city'   => $volunteerProfile->user->profile->city->name,
+            'status' => $volunteerProfile->status,
+            'skills' => $volunteerProfile->skills->pluck('name'),
+            'total_hours' => $volunteerProfile->total_hours
+        ],
+    ], 201);
+}
+public function destroy($id)
+{
+    $user = User::where('role', 'volunteer')->find($id);
+
+    if (!$user) {
+        return response()->json([
+            'message' => 'المتطوع غير موجود',
+        ], 404);
+    }
+
+    DB::transaction(function () use ($user) {
+
+        $volunteer = $user->volunterProfile;
+
+        if ($volunteer) {
+            $volunteer->skills()->detach();
+            $volunteer->delete();
+        }
+
+        optional($user->profile)->delete();
+
+        $user->delete();
+    });
+
+    return response()->json([
+        'message' => 'تم حذف المتطوع بنجاح',
+    ]);
+}
+public function updateStatus(Request $request, $id)
+{
+    $validated = $request->validate([
+        'status' => 'required|in:منشغل,متاح,غير متاح',
+    ]);
+
+    $user = User::where('role', 'volunteer')
+        ->with('volunterProfile')
+        ->find($id);
+
+    if (!$user || !$user->volunterProfile) {
+        return response()->json([
+            'message' => 'المتطوع غير موجود',
+        ], 404);
+    }
+
+    $user->volunterProfile->update([
+        'status' => $validated['status']
+    ]);
+
+    return response()->json([
+        'message' => 'تم تحديث حالة المتطوع بنجاح',
+        'data' => [
+            'id' => $user->id,
+            'status' => $user->volunterProfile->status,
+        ],
+    ]);
+}
+public function show($id)
+{
+    $user = User::with([
+        'profile.city',
+        'volunterProfile.skills'
+    ])
+        ->where('role', 'volunteer')
+        ->find($id);
+
+    if (!$user) {
+        return response()->json([
+            'message' => 'المتطوع غير موجود',
+        ], 404);
+    }
+
+    $profile = $user->profile;
+    $volunteer = $user->volunterProfile;
+
+    return response()->json([
+        'data' => [
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'phone' => $profile?->phone,
+            'city' => $profile?->city?->name,
+            'city_id' => $profile?->city_id,
+            'birth_date' => $profile?->birth_date,
+            'gender' => $profile?->gender,
+            'personal_photo' => $profile?->Personal_photo
+                ? asset('storage/' . $profile->Personal_photo)
+                : null,
+
+            'bio' => $volunteer?->bio,
+            'status' => $volunteer?->status,
+            'favorite_period' => $volunteer?->Favorite_period,
+            'commitment_type' => $volunteer?->Commitment_type,
+            'educational_level' => $volunteer?->Educational_level,
+            'total_hours' => $volunteer?->total_hours,
+            'previous_voluntering' => (bool)$volunteer?->previous_voluntering,
+            'previous_work_place' => $volunteer?->previous_work_place,
+            'experience_years' => $volunteer?->experience_years,
+            'car' => (bool)$volunteer?->car,
+            'facebook' => $volunteer?->facebook,
+            'linkedin' => $volunteer?->linkedin,
+            'points' => $volunteer?->points,
+            'rank' => $volunteer?->rank,
+            'skills' => $volunteer?->skills->pluck('name'),
+            'created_at' => optional($volunteer?->created_at)->format('Y-m-d'),
+        ]
+    ]);
+}
 }

@@ -54,10 +54,11 @@ class User extends Authenticatable
         return $this->hasOne(BeneficiaryProfile::class);
     }
 
-    public function volunteer()
+    public function volunterProfile()
     {
         return $this->hasOne(VolunterProfile::class);
     }
+
 
     public function donations()
 {

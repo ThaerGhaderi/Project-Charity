@@ -10,20 +10,21 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('aid_applications', function (Blueprint $table) {
-            $table->id();
+                   $table->id();
             $table->foreignId('beneficiary_profile_id')->constrained('beneficiary_profiles')->onDelete('cascade');
             $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
             $table->string('type');
             $table->text('description');
             $table->boolean('is_urgent')->default(false);
-            $table->enum('status', ['pending', 'reviewing', 'approved', 'rejected', 'completed', 'cancelled'])->default('pending');
+            $table->enum('status', ['pending', 'reviewing', 'approved', 'rejected', 'completed', 'cancelled','قيد الانتظار','مراجعة','موافقة','مرفوض','مكتمل','ملغة'])->default('pending');
             $table->text('admin_notes')->nullable();
             $table->foreignId('reviewed_by')->nullable()->constrained('users')->onDelete('set null');
             $table->timestamp('reviewed_at')->nullable();
+            $table->date('application_date')->nullable();
             $table->decimal('amount_requested', 15, 2)->nullable();
             $table->decimal('amount_approved', 15, 2)->nullable();
             $table->timestamps();
-            
+
             // Indexes for better performance
             $table->index(['user_id', 'status']);
             $table->index(['type', 'is_urgent']);

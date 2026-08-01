@@ -10,6 +10,6 @@ class Skill extends Model
 
     public function volunteerProfiles()
     {
-        return $this->belongsToMany(VolunterProfile::class, 'volunteer_skills');
+        return $this->belongsToMany(VolunterProfile::class,'volunteer_skills','skill_id','volunter_profile_id');
     }
 }

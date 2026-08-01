@@ -237,8 +237,6 @@ Route::controller(CampaignController::class)->group(function () {
     Route::post('/campaigns/store', 'store');
     Route::get('/campaigns/show/{id}', 'showCampaign');
     Route::put('/campaigns/update/{id}', 'update');
-        Route::put('/campaigns/status/{id}','updateStatus');
-
     Route::delete('/campaigns/delete/{id}', 'destroy');
 });
 });
@@ -269,6 +267,21 @@ Route::get('/donations', [DorationController::class, 'index']);
 Route::get('/donations/{id}', [DorationController::class, 'show']);
 Route::delete('/donations/{id}', [DorationController::class, 'destroy']);
 Route::put('/donations/{id}', [DorationController::class, 'update']);
+
+
+Route::get('/volunteers', [ControllersVolunterProfileController::class,'getVolunteers']);
+Route::post('/volunteers', [ControllersVolunterProfileController::class, 'store']);
+Route::delete('/volunteers/{id}', [ControllersVolunterProfileController::class, 'destroy']);
+Route::patch('/volunteers/{id}/status', [ControllersVolunterProfileController::class, 'updateStatus']);
+Route::get('/volunteers/{id}', [ControllersVolunterProfileController::class, 'show']);
+
+
+Route::prefix('aid-applications')->group(function () {
+    Route::get('/', [AidApplicationController::class, 'getAll']);
+    Route::get('/{id}', [AidApplicationController::class, 'display']);
+    Route::patch('/{id}/status', [AidApplicationController::class, 'updateStory']);
+});
+
 
 // ==================== EXPORT DONATIONS ====================
 Route::get('/users/exportDonations', [DorationController::class, 'export']);

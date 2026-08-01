@@ -24,7 +24,7 @@ class VolunterProfile extends Model
         'linkedin',
         'points',
         'rank',
-        
+
     ];
 
     protected $casts = [
@@ -33,14 +33,14 @@ class VolunterProfile extends Model
     ];
 
     // ==================== العلاقات الأساسية ====================
-    
+
     public function user()
     {
         return $this->belongsTo(User::class);
     }
 
     // ==================== العلاقات مع نظام المتطوع ====================
-    
+
     public function tasks()
     {
         return $this->hasMany(VolunteerTask::class, 'volunteer_id');
@@ -66,7 +66,7 @@ class VolunterProfile extends Model
     }
 
     // ==================== العلاقات مع المراجع ====================
-    
+
     public function domains()
     {
         return $this->belongsToMany(Domain::class, 'volunteer_domains');
@@ -84,7 +84,7 @@ class VolunterProfile extends Model
 
     public function skills()
     {
-        return $this->belongsToMany(Skill::class, 'volunteer_skills');
+        return $this->belongsToMany(Skill::class, 'volunteer_skills', 'volunter_profile_id', 'skill_id');
     }
 
     public function categories()

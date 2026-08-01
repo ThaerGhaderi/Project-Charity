@@ -17,7 +17,7 @@ return new class extends Migration
             $table->foreignId('city_id')->constrained('cities');
             $table->string('photo_id')->nullable();
             $table->string('phone')->unique();
-            $table->date('birth_date');
+            $table->date('birth_date')->nullable();
             $table->enum('gender',['ذكر','انثى']);
             $table->string('Personal_photo')->nullable();
              $table->text('bio')->nullable();

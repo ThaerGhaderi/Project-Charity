@@ -460,8 +460,8 @@ class AidApplicationController extends Controller
     {
         $admins = User::whereIn('role', ['admin', 'Admin'])->get();
 
-        $title = $application->is_urgent 
-            ? '🚨 طلب مساعدة عاجل جديد!' 
+        $title = $application->is_urgent
+            ? '🚨 طلب مساعدة عاجل جديد!'
             : '📋 طلب مساعدة جديد';
 
         $body = $application->is_urgent
@@ -534,4 +534,101 @@ class AidApplicationController extends Controller
             default => $status,
         };
     }
+    public function getAll(Request $request)
+    {
+       $query = AidApplication::with(['beneficiary', 'user']);
+
+    if ($request->filled('status')) {
+        $query->where('status', $request->status);
+    }
+
+    if ($request->filled('type')) {
+        $query->where('type', $request->type);
+    }
+
+    $applications = $query->latest()->get();
+
+    $data = $applications->map(function ($item) {
+        return [
+            'id'          => $item->id,
+            'name'        => optional($item->user)->name,
+            'phone'       => optional($item->beneficiary)->phone,
+            'city'        => optional($item->beneficiary)->city,
+            'type'        => $item->type,
+            'is_urgent'   => $item->is_urgent,
+            'status'      => $item->status,
+            'status_text' => $item->status_text,
+            'created_at'  => $item->created_at->format('Y-m-d'),
+        ];
+    });
+
+    return response()->json([
+        'data'  => $data,
+        'total' => $data->count(),
+    ]);
+    }
+    public function display($id)
+    {
+        $item = AidApplication::with(['beneficiary', 'user', 'reviewer'])->findOrFail($id);
+
+        return response()->json([
+            'data' => [
+                'id'                => $item->id,
+                'name'              => optional($item->user)->name,
+                'phone'             => optional($item->beneficiary)->phone,
+                'city'              => optional($item->beneficiary)->city,
+                'type'              => $item->type,
+                'description'       => $item->description,
+                'is_urgent'         => $item->is_urgent,
+                'amount_requested'  => $item->amount_requested,
+                'amount_approved'   => $item->amount_approved,
+                'status'            => $item->status,
+                'status_text'       => $item->status_text,
+                'admin_notes'       => $item->admin_notes,
+                'reviewed_by'       => optional($item->reviewer)->name,
+                'reviewed_at'       => optional($item->reviewed_at)?->format('Y-m-d H:i'),
+                'created_at'        => $item->created_at->format('Y-m-d'),
+            ],
+        ]);
+    }
+    public function updateStory(Request $request, $id)
+    {
+
+    $validated = $request->validate([
+        'status'          => 'required|in:pending,reviewing,approved,rejected,completed,cancelled,قيد الانتظار,مراجعة,موافقة,مرفوض,مكتمل,ملغة',
+        'admin_notes'     => 'nullable|string|max:1000',
+        'amount_approved' => 'nullable|numeric',
+    ]);
+    $item = AidApplication::find($id);
+    if (!$item) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Aid Application not found.'
+        ], 404);
+    }
+
+        $item->status = $validated['status'];
+        $item->reviewed_by = null;
+        $item->reviewed_at = now();
+
+        if ($request->filled('admin_notes')) {
+            $item->admin_notes = $validated['admin_notes'];
+        }
+
+        if ($request->filled('amount_approved')) {
+            $item->amount_approved = $validated['amount_approved'];
+        }
+
+        $item->save();
+
+        return response()->json([
+            'message' => 'تم تحديث حالة الطلب بنجاح',
+            'data' => [
+                'id'          => $item->id,
+                'status'      => $item->status,
+                'status_text' => $item->status_text,
+            ],
+        ]);
+    }
+
 }
