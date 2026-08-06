@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\RefundRequest;
 use App\Models\RefundRequest as RefundRequestModel;
 use App\Models\Donation;
+use App\Models\Notification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB; // ✅ إضافة للمعاملة الآمنة
 
@@ -33,12 +34,11 @@ class RefundController extends Controller
 
             DB::commit();
 
-            // ✅ إرسال إشعار (معلق حالياً)
-            // Notification::sendToAdmins('طلب استرداد جديد', $refundRequest->toArray());
+             Notification::sendToAdmins('طلب استرداد جديد', $refundRequest->toArray());
 
             return response()->json([
                 'success' => true,
-                'message' => 'تم تقديم طلب الاسترداد بنجاح. سيتم مراجعته من قبل الإدارة',
+                'message' => 'تم تقديم طلب الاسترداد بنجاح',
                 'data' => [
                     'request_id' => $refundRequest->id,
                     'status' => 'pending',
