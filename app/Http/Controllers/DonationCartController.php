@@ -136,63 +136,62 @@ class DonationCartController extends Controller
         ], 200);
     }
 
-    /**
-     * Checkout - process all items in cart
-     */
+    
     public function checkout(Request $request)
-    {
-        $user = $request->user();
-        
-        $cartItems = DonationCart::with(['campaign'])
-            ->where('user_id', $user->id)
-            ->get();
+{
+    $user = $request->user();
+    
+    $donorProfile = \App\Models\DonorProfile::firstOrCreate(
+        ['user_id' => $user->id],
+        [
+            'name' => $user->name,
+            'email' => $user->email,
+           
+        ]
+    );
+    
+    $cartItems = DonationCart::with(['campaign'])
+        ->where('user_id', $user->id)
+        ->get();
 
-        if ($cartItems->isEmpty()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'السلة فارغة'
-            ], 400);
-        }
-
-        $total = $cartItems->sum('amount');
-
-        // Create donations for each cart item
-        $donations = [];
-        
-        foreach ($cartItems as $item) {
-            $donation = Donation::create([
-                'donor_id' => $user->id,
-               // 'user_id' => $user->id,
-                'campaign_id' => $item->campaign_id,
-                'amount' => $item->amount,
-                'currency' => 'USD',
-                'payment_method' => $request->payment_method ?? 'stripe',
-                'status' => 'pending',
-                'donated_at' => now()
-            ]);
-            
-            $donations[] = $donation;
-        }
-
-        // Process payment for total amount
-        // In real implementation, this would integrate with payment gateway
-        
-        // Clear cart after successful checkout
-        DonationCart::where('user_id', $user->id)->delete();
-
-        // Mark all donations as completed
-        foreach ($donations as $donation) {
-            $donation->markAsCompleted();
-        }
-
+    if ($cartItems->isEmpty()) {
         return response()->json([
-            'success' => true,
-            'message' => 'تم إتمام التبرع بنجاح',
-            'data' => [
-                'donations' => $donations,
-                'total_amount' => $total,
-                'receipt_url' => null
-            ]
-        ], 200);
+            'success' => false,
+            'message' => 'السلة فارغة'
+        ], 400);
     }
+
+    $total = $cartItems->sum('amount');
+    $donations = [];
+    
+    foreach ($cartItems as $item) {
+        $donation = Donation::create([
+            'donor_id' => $donorProfile->id, 
+            'campaign_id' => $item->campaign_id,
+            'amount' => $item->amount,
+            'currency' => 'USD',
+            'payment_method' => $request->payment_method ?? 'stripe',
+            'status' => 'pending',
+            'donated_at' => now()
+        ]);
+        
+        $donations[] = $donation;
+    }
+
+    DonationCart::where('user_id', $user->id)->delete();
+
+    foreach ($donations as $donation) {
+        $donation->markAsCompleted();
+    }
+
+    return response()->json([
+        'success' => true,
+        'message' => 'تم إتمام التبرع بنجاح',
+        'data' => [
+            'donations' => $donations,
+            'total_amount' => $total,
+            'receipt_url' => null
+        ]
+    ], 200);
+}
 }
