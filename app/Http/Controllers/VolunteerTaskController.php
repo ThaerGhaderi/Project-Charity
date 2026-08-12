@@ -3,6 +3,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\EvaluateVolunteerTaskRequest;
 use App\Models\VolunteerTask;
 use App\Models\VolunteerCheckIn;
 use App\Models\VolunteerEvaluation;
@@ -951,4 +952,160 @@ $volunteer = $user->volunterProfile;
             ]);
         }
     }
+ public function pendingEvaluation(Request $request)
+    {
+        $query = VolunteerTask::where('status', 'مكتملة')
+            ->whereHas('evaluation', function ($q) {
+                $q->whereNull('rating');
+            })
+            ->with(['volunteer.user', 'supervisor', 'campaign', 'beneficiary']);
+
+        if ($request->filled('supervisor_id')) {
+            $query->where('supervisor_id', $request->supervisor_id);
+        }
+
+        $tasks = $query->orderBy('completed_at', 'desc')->paginate(20);
+
+        return response()->json([
+            'code' => '200',
+            'success' => true,
+            'message' => 'تم جلب المهام بانتظار التقييم بنجاح',
+            'data' => $tasks,
+        ], 200);
+    }
+    public function evaluate($id, EvaluateVolunteerTaskRequest $request)
+    {
+       $admin = $request->user(); // ممكن يكون null الآن
+
+    $task = VolunteerTask::with(['volunteer.user', 'evaluation'])->find($id);
+
+    if (!$task) {
+        return response()->json([
+            'code' => '404',
+            'success' => false,
+            'message' => 'المهمة غير موجودة',
+        ], 404);
+    }
+
+    if ($task->status !== 'مكتملة') {
+        return response()->json([
+            'code' => '400',
+            'success' => false,
+            'message' => 'لا يمكن تقييم مهمة غير مكتملة',
+        ], 400);
+    }
+
+    try {
+        DB::beginTransaction();
+
+        $evaluation = $task->evaluation()->first()
+            ?? VolunteerEvaluation::firstOrNew([
+                'task_id' => $task->id,
+                'volunteer_id' => $task->volunteer_id,
+            ]);
+
+        $isFirstTimeEvaluation = is_null($evaluation->rating);
+
+        $evaluation->rating = $request->rating;
+        $evaluation->feedback = $request->feedback;
+        $evaluation->supervisor_id = $admin?->id; // ✅ null-safe operator بدل $admin->id
+        $evaluation->evaluated_at = now();
+        $evaluation->save();
+
+        DB::commit();
+
+        if ($task->volunteer && $task->volunteer->user) {
+            Notification::sendPushOnly(
+                $task->volunteer->user->id,
+                '⭐ تم تقييم مهمتك',
+                "حصلت على تقييم {$evaluation->rating}/10 لمهمة '{$task->title}'",
+                'task_evaluated',
+                ['task_id' => $task->id, 'rating' => $evaluation->rating]
+            );
+        }
+
+        return response()->json([
+            'code' => '200',
+            'success' => true,
+            'message' => $isFirstTimeEvaluation ? 'تم تقييم المهمة بنجاح' : 'تم تحديث التقييم بنجاح',
+            'data' => [
+                'evaluation' => $evaluation,
+                'task' => [
+                    'id' => $task->id,
+                    'title' => $task->title,
+                ],
+                'volunteer' => [
+                    'id' => $task->volunteer_id,
+                    'name' => $task->volunteer?->user?->name,
+                ],
+            ],
+        ], 200);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return response()->json([
+            'code' => '500',
+            'success' => false,
+            'message' => 'حدث خطأ أثناء تقييم المهمة',
+            'error' => $e->getMessage(),
+        ], 500);
+    }
+    }
+    // app/Http/Controllers/Api/VolunteerTaskController.php
+
+public function store(Request $request)
+{
+    $validated = $request->validate([
+        'title'          => 'required|string|max:255',
+        'type_id'        => 'nullable|exists:types,id',
+        'priority'       => 'nullable|in:منخفضة,متوسطة,عالية,عاجلة',
+        'due_date'       => 'nullable|date|after_or_equal:today',
+        'location'       => 'nullable|string|max:255',
+        'description'    => 'nullable|string',
+
+        'volunteer_id'      => 'nullable|exists:volunter_profiles,id',
+        'campaign_id'       => 'nullable|exists:campaigns,id',
+        'visit_id'          => 'nullable|exists:visits,id',
+        'aid_application_id'=> 'nullable|exists:aid_applications,id',
+        'beneficiary_id'    => 'nullable|exists:users,id',
+    ]);
+
+    $task = VolunteerTask::create([
+        ...$validated,
+        'supervisor_id' => null,
+        'status' => $validated['volunteer_id'] ?? null ? 'قيد التنفيذ' : 'جديدة',
+        'start_time' => $validated['volunteer_id'] ?? null ? now() : null,
+    ]);
+    return response()->json([
+        'message' => 'تم إنشاء المهمة بنجاح',
+        'data' => $task->load('volunteer.user', 'type', 'supervisor'),
+    ], 201);
 }
+public function assign(Request $request, VolunteerTask $task)
+{
+    $validated = $request->validate([
+        'volunteer_id' => 'required|exists:volunter_profiles,id',
+    ]);
+    $volunteer = VolunterProfile::findOrFail($validated['volunteer_id']);
+
+    if ($volunteer->status !== 'متاح') {
+        return response()->json([
+            'message' => 'هذا المتطوع غير متاح حالياً',
+        ], 422);
+    }
+    $task->update([
+        'volunteer_id'   => $volunteer->id,
+        'supervisor_id'  => $task->supervisor_id ?? null,
+        'status'         => 'قيد التنفيذ',
+        'start_time'     => now(),
+    ]);
+    $volunteer->update(['status' => 'مشغول']);
+    return response()->json([
+        'message' => 'تم إسناد المهمة للمتطوع بنجاح',
+        'data' => $task->fresh()->load('volunteer.user', 'type'),
+    ]);
+}
+}
+
+
+

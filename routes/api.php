@@ -20,6 +20,7 @@ use App\Http\Controllers\LoyaltyPointsController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\RecurringDonationController;
 use App\Http\Controllers\RefundController;
+use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SkillController;
 use App\Http\Controllers\SponsorshipController;
 use App\Http\Controllers\TypeController;
@@ -240,6 +241,18 @@ Route::controller(CampaignController::class)->group(function () {
     Route::delete('/campaigns/delete/{id}', 'destroy');
 });
 });
+Route::prefix('reports')->group(function () {
+Route::get('/general', [ReportController::class, 'general']);
+Route::get('/donations', [ReportController::class, 'donations']);
+Route::get('/beneficiaries', [ReportController::class, 'beneficiaries']);
+Route::get('/volunteers', [ReportController::class, 'volunteers']);
+});
+
+
+
+
+
+
 
 // ==================== CHAT ROUTES ====================
 Route::prefix('chat')->middleware('auth:sanctum')->group(function () {
@@ -276,11 +289,26 @@ Route::patch('/volunteers/{id}/status', [ControllersVolunterProfileController::c
 Route::get('/volunteers/{id}', [ControllersVolunterProfileController::class, 'show']);
 
 
+
+Route::post('/volunteer-tasks', [VolunteerTaskController::class, 'store']);
+Route::post('/volunteer-tasks/{task}/assign', [VolunteerTaskController::class, 'assign']);
+Route::get('volunteer-tasks/pending-evaluation', [VolunteerTaskController::class, 'pendingEvaluation']);
+Route::post('volunteer-tasks/{id}/evaluate', [VolunteerTaskController::class, 'evaluate']);
+
+
 Route::prefix('aid-applications')->group(function () {
     Route::get('/', [AidApplicationController::class, 'getAll']);
     Route::get('/{id}', [AidApplicationController::class, 'display']);
     Route::patch('/{id}/status', [AidApplicationController::class, 'updateStory']);
 });
+// راوت تحديث الحالة (للأدمن)
+Route::put('/all-visits/{id}/status', [VisitController::class, 'updateVisitStatusAdmin']);
+Route::get('/all-visits', [VisitController::class, 'getAllVisits']);
+// راوتات الحذف (للأدمن)
+Route::delete('/all-visits/delete-all', [VisitController::class, 'deleteAllVisits']); // حذف الكل
+Route::delete('/all-visits/{id}', [VisitController::class, 'destroy2']); // حذف زيارة واحدة
+// راوت إضافة زيارة من لوحة التحكم
+Route::post('/all-visits', [VisitController::class, 'storeAdminVisit']);
 
 
 // ==================== EXPORT DONATIONS ====================

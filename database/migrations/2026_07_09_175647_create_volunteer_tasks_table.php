@@ -19,6 +19,11 @@ return new class extends Migration
             $table->foreignId('aid_application_id')->nullable()->constrained('aid_applications')->onDelete('set null');
             $table->foreignId('visit_id')->nullable()->constrained('visits')->onDelete('set null');
 
+
+            $table->foreignId('type_id')->nullable()->constrained('types')->onDelete('set null');
+            $table->enum('priority', ['منخفضة', 'متوسطة', 'عالية', 'عاجلة'])->default('متوسطة');
+            $table->date('due_date')->nullable();
+
             $table->string('title');
             $table->text('description')->nullable();
             $table->string('location')->nullable();

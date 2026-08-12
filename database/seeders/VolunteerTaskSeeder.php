@@ -21,7 +21,7 @@ class VolunteerTaskSeeder extends Seeder
 
         // ✅ جلب البيانات الموجودة
         $volunteers = VolunterProfile::with('user')->get();
-        $campaigns = Campaign::where('status', 'active')->get();
+        $campaigns = Campaign::where('status', 'نشطة')->get();
         $beneficiaries = User::where('role', 'Beneficiary')->where('profile_completed', true)->get();
         $aidApplications = AidApplication::where('status', 'approved')->get();
         $visits = Visit::where('status', 'confirmed')->get();
@@ -44,11 +44,11 @@ class VolunteerTaskSeeder extends Seeder
         // ==================== 1. مهام من الحملات ====================
         if ($campaigns->isNotEmpty()) {
             $this->command->info('📢 إنشاء مهام من الحملات...');
-            
+
             foreach ($campaigns as $campaign) {
                 // اختيار متطوع عشوائي
                 $volunteer = $volunteers->random();
-                
+
                 $taskTitles = [
                     "توزيع المساعدات - {$campaign->title}",
                     "تنظيم الفعاليات - {$campaign->title}",
@@ -64,10 +64,10 @@ class VolunteerTaskSeeder extends Seeder
                 foreach ($selectedTitles as $title) {
                     $status = $faker->randomElement(['جديدة', 'قيد التنفيذ', 'مكتملة']);
                     $progress = $status === 'مكتملة' ? 100 : ($status === 'قيد التنفيذ' ? rand(30, 80) : 0);
-                    
+
                     // اختيار متطوع عشوائي لكل مهمة
                     $taskVolunteer = $volunteers->random();
-                    
+
                     VolunteerTask::create([
                         'volunteer_id' => $taskVolunteer->id,
                         'supervisor_id' => rand(1, 5),
@@ -89,7 +89,7 @@ class VolunteerTaskSeeder extends Seeder
                         'created_at' => $faker->dateTimeBetween('-30 days', 'now'),
                         'updated_at' => now(),
                     ]);
-                    
+
                     $tasksCreated++;
                 }
             }
@@ -99,11 +99,11 @@ class VolunteerTaskSeeder extends Seeder
         // ==================== 2. مهام من طلبات المساعدة ====================
         if ($aidApplications->isNotEmpty()) {
             $this->command->info('📢 إنشاء مهام من طلبات المساعدة...');
-            
+
             foreach ($aidApplications as $application) {
                 $volunteer = $volunteers->random();
                 $beneficiary = $application->user;
-                
+
                 $typeMap = [
                     'مالية' => 'مساعدة مالية',
                     'تعليمية' => 'مساعدة تعليمية',
@@ -115,13 +115,13 @@ class VolunteerTaskSeeder extends Seeder
                     'مياه' => 'مساعدة مياه',
                     'كسوة' => 'مساعدة كسوة',
                 ];
-                
+
                 $taskTitle = $typeMap[$application->type] ?? 'مساعدة';
                 $userName = $beneficiary?->name ?? 'مستفيد';
-                
+
                 $status = $faker->randomElement(['جديدة', 'قيد التنفيذ', 'مكتملة']);
                 $progress = $status === 'مكتملة' ? 100 : ($status === 'قيد التنفيذ' ? rand(30, 80) : 0);
-                
+
                 VolunteerTask::create([
                     'volunteer_id' => $volunteer->id,
                     'supervisor_id' => rand(1, 5),
@@ -143,7 +143,7 @@ class VolunteerTaskSeeder extends Seeder
                     'created_at' => $faker->dateTimeBetween('-20 days', 'now'),
                     'updated_at' => now(),
                 ]);
-                
+
                 $tasksCreated++;
             }
             $this->command->info(" تم إنشاء مهام من طلبات المساعدة");
@@ -152,14 +152,14 @@ class VolunteerTaskSeeder extends Seeder
         // ==================== 3. مهام من الزيارات ====================
         if ($visits->isNotEmpty()) {
             $this->command->info(' إنشاء مهام من الزيارات...');
-            
+
             foreach ($visits as $visit) {
                 $volunteer = $volunteers->random();
                 $beneficiary = $visit->beneficiary;
-                
+
                 $status = $faker->randomElement(['جديدة', 'قيد التنفيذ', 'مكتملة']);
                 $progress = $status === 'مكتملة' ? 100 : ($status === 'قيد التنفيذ' ? rand(30, 80) : 0);
-                
+
                 VolunteerTask::create([
                     'volunteer_id' => $volunteer->id,
                     'supervisor_id' => rand(1, 5),
@@ -181,7 +181,7 @@ class VolunteerTaskSeeder extends Seeder
                     'created_at' => $faker->dateTimeBetween('-15 days', 'now'),
                     'updated_at' => now(),
                 ]);
-                
+
                 $tasksCreated++;
             }
             $this->command->info(" تم إنشاء مهام من الزيارات");
@@ -189,7 +189,7 @@ class VolunteerTaskSeeder extends Seeder
 
         // ==================== 4. مهام عامة (بدون مصدر) ====================
         $this->command->info(' إنشاء مهام عامة...');
-        
+
         $generalTasks = [
             ['title' => 'تنظيم حملة تبرعات', 'description' => 'تنظيم حملة تبرعات في المركز الرئيسي'],
             ['title' => 'توزيع وجبات الإفطار', 'description' => 'توزيع وجبات الإفطار على المحتاجين'],
@@ -204,7 +204,7 @@ class VolunteerTaskSeeder extends Seeder
                 $volunteer = $volunteers->random();
                 $status = $faker->randomElement(['جديدة', 'قيد التنفيذ', 'مكتملة']);
                 $progress = $status === 'مكتملة' ? 100 : ($status === 'قيد التنفيذ' ? rand(30, 80) : 0);
-                
+
                 VolunteerTask::create([
                     'volunteer_id' => $volunteer->id,
                     'supervisor_id' => rand(1, 5),
@@ -226,7 +226,7 @@ class VolunteerTaskSeeder extends Seeder
                     'created_at' => $faker->dateTimeBetween('-30 days', 'now'),
                     'updated_at' => now(),
                 ]);
-                
+
                 $tasksCreated++;
             }
         }
@@ -234,10 +234,10 @@ class VolunteerTaskSeeder extends Seeder
 
         // ==================== 5. مهام مع تسجيل حضور ====================
         $this->command->info(' إنشاء تسجيلات حضور للمهام...');
-        
+
         $inProgressTasks = VolunteerTask::where('status', 'قيد التنفيذ')->get();
         $completedTasks = VolunteerTask::where('status', 'مكتملة')->get();
-        
+
         foreach ($inProgressTasks as $task) {
             // إنشاء تسجيل حضور للمهام قيد التنفيذ
             DB::table('volunteer_check_ins')->insert([
@@ -254,12 +254,12 @@ class VolunteerTaskSeeder extends Seeder
                 'updated_at' => now(),
             ]);
         }
-        
+
         foreach ($completedTasks as $task) {
             // إنشاء تسجيل حضور للمهام المكتملة
             $checkInTime = $task->start_time ?? $faker->dateTimeBetween('-5 hours', '-2 hours');
             $checkOutTime = $task->end_time ?? $faker->dateTimeBetween('-1 hour', 'now');
-            
+
             DB::table('volunteer_check_ins')->insert([
                 'task_id' => $task->id,
                 'volunteer_id' => $task->volunteer_id,

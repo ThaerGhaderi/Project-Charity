@@ -24,7 +24,7 @@ class CampaignSeeder extends Seeder
                 'goal_amount' => 20000,
                 'category' => 'صحة',
                 'is_emergency' => false,
-                'status' => 'active',
+                'status' => 'نشطة',
             ],
             [
                 'title' => 'دعم تعليم الأيتام',
@@ -32,7 +32,7 @@ class CampaignSeeder extends Seeder
                 'goal_amount' => 15000,
                 'category' => 'تعليم',
                 'is_emergency' => false,
-                'status' => 'active',
+                'status' => 'نشطة',
             ],
             [
                 'title' => 'إغاثة متضرري الزلزال',
@@ -40,7 +40,7 @@ class CampaignSeeder extends Seeder
                 'goal_amount' => 50000,
                 'category' => 'إطعام',
                 'is_emergency' => true,
-                'status' => 'active',
+                'status' => 'نشطة',
             ],
             [
                 'title' => 'إعادة بناء المنازل المدمرة',
@@ -48,7 +48,7 @@ class CampaignSeeder extends Seeder
                 'goal_amount' => 30000,
                 'category' => 'مساجد',
                 'is_emergency' => false,
-                'status' => 'active',
+                'status' => 'نشطة',
             ],
             [
                 'title' => 'توفير مياه الشرب النقية',
@@ -56,7 +56,7 @@ class CampaignSeeder extends Seeder
                 'goal_amount' => 25000,
                 'category' => 'مياه',
                 'is_emergency' => false,
-                'status' => 'active',
+                'status' => 'نشطة',
             ],
             [
                 'title' => 'رعاية الأيتام',
@@ -64,7 +64,7 @@ class CampaignSeeder extends Seeder
                 'goal_amount' => 35000,
                 'category' => 'أيتام',
                 'is_emergency' => false,
-                'status' => 'active',
+                'status' => 'نشطة',
             ],
         ];
 
@@ -86,7 +86,6 @@ class CampaignSeeder extends Seeder
                 'created_by' => $admin->id,
             ]);
         }
-
         $this->command->info("✅ Campaigns created successfully!");
     }
 }

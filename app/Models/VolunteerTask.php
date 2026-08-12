@@ -16,7 +16,7 @@ class VolunteerTask extends Model
         'supervisor_id',
         'beneficiary_id',
         'aid_application_id',
-         'campaign_id',  
+        'campaign_id',
         'visit_id',
         'title',
         'description',
@@ -30,6 +30,9 @@ class VolunteerTask extends Model
         'supervisor_notes',
         'completed_at',
         'cancelled_at',
+        'priority',
+        'due_date',
+        'type_id',
     ];
 
     protected $casts = [
@@ -52,7 +55,7 @@ class VolunteerTask extends Model
     ];
 
     // ==================== العلاقات ====================
-    
+
     public function volunteer()
     {
         return $this->belongsTo(VolunterProfile::class, 'volunteer_id');
@@ -85,29 +88,29 @@ class VolunteerTask extends Model
     }
 
 
-// ✅ أضف هذه العلاقة
-public function campaign()
-{
-    return $this->belongsTo(Campaign::class);
-}
-
-// ✅ أضف هذه الخصائص المحسوبة
-
-public function getSourceNameAttribute()
-{
-    if ($this->campaign) {
-        return $this->campaign->title;
-    } elseif ($this->visit) {
-        return $this->visit->location;
-    } elseif ($this->aidApplication) {
-        return $this->aidApplication->type;
+    // ✅ أضف هذه العلاقة
+    public function campaign()
+    {
+        return $this->belongsTo(Campaign::class);
     }
-    return null;
-}
+
+    // ✅ أضف هذه الخصائص المحسوبة
+
+    public function getSourceNameAttribute()
+    {
+        if ($this->campaign) {
+            return $this->campaign->title;
+        } elseif ($this->visit) {
+            return $this->visit->location;
+        } elseif ($this->aidApplication) {
+            return $this->aidApplication->type;
+        }
+        return null;
+    }
 
 
     // ==================== النطاقات ====================
-    
+
     public function scopeInProgress($query)
     {
         return $query->where('status', 'قيد التنفيذ');
@@ -129,7 +132,7 @@ public function getSourceNameAttribute()
     }
 
     // ==================== الخصائص المحسوبة ====================
-    
+
     public function getStatusTextAttribute()
     {
         return $this->status;
@@ -147,11 +150,11 @@ public function getSourceNameAttribute()
     {
         $seconds = $this->elapsed_time;
         if (!$seconds) return '00:00:00';
-        
+
         $hours = floor($seconds / 3600);
         $minutes = floor(($seconds % 3600) / 60);
         $secs = $seconds % 60;
-        
+
         return sprintf('%02d:%02d:%02d', $hours, $minutes, $secs);
     }
 
@@ -170,30 +173,42 @@ public function getSourceNameAttribute()
         return $this->status === 'جديدة';
     }
 
-   public function getSourceTypeAttribute()
-{
-    if ($this->campaign_id) {
-        return 'حملة';
-    } elseif ($this->visit_id) {
-        return 'زيارة ميدانية';
-    } elseif ($this->aid_application_id) {
-        return 'طلب مساعدة';
-    } elseif ($this->beneficiary_id) {
-        return 'مستفيد مباشر';
+    public function getSourceTypeAttribute()
+    {
+        if ($this->campaign_id) {
+            return 'حملة';
+        } elseif ($this->visit_id) {
+            return 'زيارة ميدانية';
+        } elseif ($this->aid_application_id) {
+            return 'طلب مساعدة';
+        } elseif ($this->beneficiary_id) {
+            return 'مستفيد مباشر';
+        }
+        return 'مهمة عامة';
     }
-    return 'مهمة عامة';
-}
 
 
     public function getBeneficiaryNameAttribute()
-{
-    if ($this->beneficiary) {
-        return $this->beneficiary->name;
-    } elseif ($this->aidApplication && $this->aidApplication->user) {
-        return $this->aidApplication->user->name;
-    } elseif ($this->visit && $this->visit->beneficiary) {
-        return $this->visit->beneficiary->name;
+    {
+        if ($this->beneficiary) {
+            return $this->beneficiary->name;
+        } elseif ($this->aidApplication && $this->aidApplication->user) {
+            return $this->aidApplication->user->name;
+        } elseif ($this->visit && $this->visit->beneficiary) {
+            return $this->visit->beneficiary->name;
+        }
+        return null;
     }
-    return null;
-}
+    public function evaluation()
+    {
+        return $this->hasOne(VolunteerEvaluation::class, 'task_id');
+    }
+    public function type()
+    {
+        return $this->belongsTo(Type::class);
+    }
+    protected function serializeDate(\DateTimeInterface $date)
+    {
+        return $date->format('Y-m-d H:i:s');
+    }
 }

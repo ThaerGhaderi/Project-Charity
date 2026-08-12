@@ -26,7 +26,7 @@ class VolunteerProfileRequest extends FormRequest
             'Commitment_type'      => 'required|in:منتظم,مرة بمرة',
             'experience_years'     => 'required|integer|min:0|max:50',
 
-
+            'status' => 'nullable|in:منشغل,متاح,غير متاح',
             'skill_ids'   => 'required|array|min:1',
             'skill_ids.*' => 'exists:skills,id',
             'day_ids'   => 'required|array|min:1',

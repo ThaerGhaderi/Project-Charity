@@ -82,7 +82,7 @@ class DomainController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'حدث خطأ أثناء إنشاء التبرع',
@@ -136,7 +136,7 @@ class DomainController extends Controller
     public function receipt($id, Request $request)
     {
         $user = $request->user();
-        
+
         $donation = Donation::with(['campaign'])
             ->where('user_id', $user->id)
             ->where('id', $id)
@@ -164,7 +164,7 @@ class DomainController extends Controller
     public function history(Request $request)
     {
         $user = $request->user();
-        
+
         $donations = Donation::with(['campaign'])
             ->where('user_id', $user->id)
             ->orderBy('donated_at', 'desc')
@@ -182,7 +182,7 @@ class DomainController extends Controller
     public function statistics(Request $request)
     {
         $user = $request->user();
-        
+
         $monthlyTrend = Donation::where('user_id', $user->id)
             ->where('status', 'completed')
             ->where('donated_at', '>=', now()->subMonths(6))
@@ -198,7 +198,7 @@ class DomainController extends Controller
                 return ['month' => $month, 'total' => $total];
             })
             ->values();
-        
+
         $stats = [
             'total_donations' => Donation::where('user_id', $user->id)
                 ->where('status', 'completed')
