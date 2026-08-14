@@ -154,12 +154,7 @@ class VolunteerTaskController extends Controller
         ], 200);
     }
 
-    /**
-     * عرض المهام المفتوحة للجميع (بدون متطوع محدد)
-     *
-     * @api {get} /api/volunteer/tasks/available Get Available Tasks
-     * @apiHeader Authorization Bearer {token}
-     */
+ 
     public function availableTasks(Request $request)
     {
         $user = $request->user();
@@ -173,7 +168,7 @@ class VolunteerTaskController extends Controller
             ], 404);
         }
 
-        // ✅ التحقق من أن المتطوع متاح
+       
         if (!$this->isVolunteerAvailable($volunteer->id)) {
             return response()->json([
                 'code' => '403',
@@ -186,12 +181,12 @@ class VolunteerTaskController extends Controller
             ], 403);
         }
 
-        // المهام المفتوحة (بدون متطوع)
+        
         $query = VolunteerTask::whereNull('volunteer_id')
             ->where('status', 'جديدة')
             ->with(['supervisor', 'beneficiary', 'visit', 'campaign', 'aidApplication']);
 
-        // تصفية حسب المصدر
+       
         if ($request->filled('source')) {
             switch ($request->source) {
                 case 'visit':
@@ -209,7 +204,7 @@ class VolunteerTaskController extends Controller
             }
         }
 
-        // تصفية حسب نوع المهمة
+        
         if ($request->filled('type')) {
             switch ($request->type) {
                 case 'visit':
@@ -224,26 +219,24 @@ class VolunteerTaskController extends Controller
             }
         }
 
-        // تصفية حسب الموقع
+       
         if ($request->filled('location')) {
             $query->where('location', 'like', '%' . $request->location . '%');
         }
 
-        // تصفية حسب الطلبات العاجلة
+      
         if ($request->boolean('urgent_only')) {
             $query->whereHas('aidApplication', function($q) {
                 $q->where('is_urgent', true);
             });
         }
 
-        // ترتيب حسب الأحدث
         $sortBy = $request->get('sort_by', 'created_at');
         $sortOrder = $request->get('sort_order', 'desc');
         $query->orderBy($sortBy, $sortOrder);
 
         $tasks = $query->get();
 
-        // إضافة خصائص إضافية
         $tasks->transform(function ($task) {
             $task->status_text = $task->status_text;
             $task->source_type = $task->source_type;
@@ -266,7 +259,7 @@ class VolunteerTaskController extends Controller
             return $task;
         });
 
-        // إحصائيات المهام المتاحة
+       
         $stats = [
             'total' => $tasks->count(),
             'from_visits' => $tasks->whereNotNull('visit_id')->count(),
@@ -293,12 +286,7 @@ class VolunteerTaskController extends Controller
         ], 200);
     }
 
-    /**
-     * عرض تفاصيل مهمة معينة
-     *
-     * @api {get} /api/volunteer/tasks/{id} Get Task Details
-     * @apiHeader Authorization Bearer {token}
-     */
+   
     public function show($id, Request $request)
     {
         $user = $request->user();
@@ -343,7 +331,7 @@ class VolunteerTaskController extends Controller
         $task->source_name = $task->source_name;
         $task->beneficiary_name = $task->beneficiary_name;
 
-        // ✅ معلومات الحضور والانصراف من check-ins
+      
         $latestCheckIn = $task->checkIns->last();
         if ($latestCheckIn) {
             $task->check_in_status = $latestCheckIn->status;
@@ -399,14 +387,7 @@ class VolunteerTaskController extends Controller
         ], 200);
     }
 
-    /**
-     * طلب بدء المهمة (تسجيل حضور)
-     * 
-     * ✅ المتطوع يسجل حضور، والمهمة تصبح "معلقة" لحين موافقة الأدمن
-     *
-     * @api {post} /api/volunteer/tasks/{id}/request-start Request Start Task
-     * @apiHeader Authorization Bearer {token}
-     */
+ 
     public function requestStartTask($id, Request $request)
     {
         $user = $request->user();
@@ -420,7 +401,7 @@ class VolunteerTaskController extends Controller
             ], 404);
         }
 
-        // البحث عن المهمة
+        
         $task = VolunteerTask::find($id);
 
         if (!$task) {
@@ -431,7 +412,7 @@ class VolunteerTaskController extends Controller
             ], 404);
         }
 
-        // ✅ التحقق: المهمة جديدة
+        
         if ($task->status !== 'جديدة') {
             return response()->json([
                 'code' => '400',
@@ -441,13 +422,13 @@ class VolunteerTaskController extends Controller
             ], 400);
         }
 
-        // ✅ إذا كانت المهمة مفتوحة، خصصها لهذا المتطوع
+       
         if (!$task->volunteer_id) {
             $task->update(['volunteer_id' => $volunteer->id]);
             $task->refresh();
         }
 
-        // ✅ التحقق: المهمة مخصصة لهذا المتطوع
+      
         if ($task->volunteer_id != $volunteer->id) {
             return response()->json([
                 'code' => '403',
@@ -457,7 +438,7 @@ class VolunteerTaskController extends Controller
             ], 403);
         }
 
-        // ✅ التحقق من وجود تسجيل حضور نشط
+       
         $existingActiveCheckIn = VolunteerCheckIn::where('task_id', $task->id)
             ->where('volunteer_id', $volunteer->id)
             ->whereNull('check_out_time')
@@ -475,20 +456,20 @@ class VolunteerTaskController extends Controller
         try {
             DB::beginTransaction();
 
-            // ✅ إنشاء تسجيل حضور (حاضر) مع بقاء check_out_time = null
+          
             $checkIn = VolunteerCheckIn::create([
                 'task_id' => $task->id,
                 'volunteer_id' => $volunteer->id,
                 'check_in_time' => now(),
                 'check_out_time' => null,
-                'status' => 'حاضر', // ✅ الحضور مسجل
+                'status' => 'حاضر', 
                 'location_verified' => true,
                 'latitude' => $request->latitude ?? null,
                 'longitude' => $request->longitude ?? null,
                 'notes' => $request->notes ?? 'بانتظار موافقة الأدمن',
             ]);
 
-            // ✅ تحديث حالة المهمة إلى "معلقة" (بانتظار موافقة الأدمن)
+           
             $task->update([
                 'status' => 'معلقة',
                 'start_time' => now(),
@@ -520,14 +501,7 @@ class VolunteerTaskController extends Controller
         }
     }
 
-    /**
-     * طلب إنهاء المهمة (تسجيل انصراف)
-     * 
-     * ✅ المتطوع يسجل انصراف، والمهمة تبقى "معلقة" لحين موافقة الأدمن
-     *
-     * @api {post} /api/volunteer/tasks/{id}/request-end Request End Task
-     * @apiHeader Authorization Bearer {token}
-     */
+    
     public function requestEndTask($id, Request $request)
     {
         $user = $request->user();
@@ -551,7 +525,7 @@ class VolunteerTaskController extends Controller
             ], 404);
         }
 
-        // ✅ التحقق: المهمة في حالة قيد التنفيذ أو معلقة
+       
         if (!in_array($task->status, ['قيد التنفيذ', 'معلقة'])) {
             return response()->json([
                 'code' => '400',
@@ -561,7 +535,6 @@ class VolunteerTaskController extends Controller
             ], 400);
         }
 
-        // ✅ التحقق: المهمة مخصصة لهذا المتطوع
         if ($task->volunteer_id != $volunteer->id) {
             return response()->json([
                 'code' => '403',
@@ -570,7 +543,7 @@ class VolunteerTaskController extends Controller
             ], 403);
         }
 
-        // ✅ البحث عن تسجيل حضور نشط (بدون انصراف)
+      
         $checkIn = VolunteerCheckIn::where('task_id', $task->id)
             ->where('volunteer_id', $volunteer->id)
             ->whereNull('check_out_time')
@@ -587,10 +560,10 @@ class VolunteerTaskController extends Controller
         try {
             DB::beginTransaction();
 
-            // ✅ تحديث تسجيل الحضور بتسجيل الانصراف
+           
             $checkIn->update([
                 'check_out_time' => now(),
-                'status' => 'منصرف', // ✅ تم الانصراف
+                'status' => 'منصرف',
                 'notes' => $request->notes ?? 'بانتظار موافقة الأدمن',
             ]);
 
@@ -642,7 +615,7 @@ class VolunteerTaskController extends Controller
             ], 404);
         }
 
-        // ✅ البحث عن مهمة نشطة (قيد التنفيذ أو معلقة)
+       
         $task = VolunteerTask::where('volunteer_id', $volunteer->id)
             ->whereIn('status', ['قيد التنفيذ', 'معلقة'])
             ->with(['supervisor', 'checkIns', 'beneficiary', 'aidApplication', 'visit', 'campaign'])
@@ -681,12 +654,7 @@ class VolunteerTaskController extends Controller
         ], 200);
     }
 
-    /**
-     * الحصول على طلبات المتطوع المعلقة
-     *
-     * @api {get} /api/volunteer/tasks/pending-requests Get Pending Requests
-     * @apiHeader Authorization Bearer {token}
-     */
+   
     public function pendingRequests(Request $request)
     {
         $user = $request->user();
@@ -700,7 +668,7 @@ class VolunteerTaskController extends Controller
             ], 404);
         }
 
-        // ✅ المهام المعلقة (بانتظار موافقة الأدمن)
+      
         $pendingTasks = VolunteerTask::where('volunteer_id', $volunteer->id)
             ->where('status', 'معلقة')
             ->with(['checkIns'])
@@ -734,12 +702,7 @@ class VolunteerTaskController extends Controller
         ], 200);
     }
 
-    /**
-     * الحصول على تقييمات المتطوع
-     *
-     * @api {get} /api/volunteer/evaluations Get Evaluations
-     * @apiHeader Authorization Bearer {token}
-     */
+  
     public function evaluations(Request $request)
     {
         $user = $request->user();
@@ -781,9 +744,7 @@ class VolunteerTaskController extends Controller
         ], 200);
     }
 
-    /**
-     * إحصائيات المتطوع
-     */
+   
     public function statistics(Request $request)
     {
         $user = $request->user();
@@ -845,9 +806,7 @@ class VolunteerTaskController extends Controller
         ], 200);
     }
 
-    /**
-     * الحصول على نقاط المتطوع والشارات
-     */
+  
     public function points(Request $request)
     {
         $user = $request->user();
@@ -883,9 +842,7 @@ class VolunteerTaskController extends Controller
         ], 200);
     }
 
-    /**
-     * لوحة المتصدرين
-     */
+   
     public function leaderboard(Request $request)
     {
         $user = $request->user();
@@ -928,16 +885,10 @@ class VolunteerTaskController extends Controller
         ], 200);
     }
 
-    // ==================== PRIVATE METHODS ====================
-
-    /**
-     * التحقق من توفر المتطوع
-     */
+   
     private function isVolunteerAvailable($volunteerId)
     {
-        // ✅ غير متاح إذا كان لديه:
-        // 1. مهام بحالة "قيد التنفيذ"
-        // 2. مهام بحالة "معلقة"
+       
         $hasInProgressTasks = VolunteerTask::where('volunteer_id', $volunteerId)
             ->where('status', 'قيد التنفيذ')
             ->exists();
@@ -946,7 +897,7 @@ class VolunteerTaskController extends Controller
             ->where('status', 'معلقة')
             ->exists();
 
-        // ✅ التحقق من وجود تسجيل حضور نشط (دون انصراف)
+       
         $hasActiveCheckIn = VolunteerCheckIn::where('volunteer_id', $volunteerId)
             ->whereNull('check_out_time')
             ->exists();
@@ -954,9 +905,7 @@ class VolunteerTaskController extends Controller
         return !($hasInProgressTasks || $hasPendingTasks || $hasActiveCheckIn);
     }
 
-    /**
-     * التحقق من وجود مهام معلقة
-     */
+
     private function hasPendingTasks($volunteerId)
     {
         return VolunteerTask::where('volunteer_id', $volunteerId)
@@ -964,9 +913,7 @@ class VolunteerTaskController extends Controller
             ->exists();
     }
 
-    /**
-     * التحقق من وجود مهام قيد التنفيذ
-     */
+    
     private function hasInProgressTasks($volunteerId)
     {
         return VolunteerTask::where('volunteer_id', $volunteerId)
@@ -974,9 +921,7 @@ class VolunteerTaskController extends Controller
             ->exists();
     }
 
-    /**
-     * تحديث الشهادات
-     */
+ 
     private function updateCertificates($volunteer)
     {
         $certificates = VolunteerCertificate::where('volunteer_id', $volunteer->id)->get();
@@ -997,7 +942,7 @@ class VolunteerTaskController extends Controller
                 if ($user) {
                     Notification::sendPushOnly(
                         $user->id,
-                        '🎉 تهانينا! حصلت على شهادة جديدة',
+                        ' تهانينا حصلت على شهادة جديدة',
                         "حصلت على شهادة '{$cert->title}' بعد إكمال {$cert->hours_required} ساعة تطوع",
                         'certificate',
                         ['certificate_id' => $cert->id]
@@ -1007,18 +952,14 @@ class VolunteerTaskController extends Controller
         }
     }
 
-    /**
-     * حساب ترتيب المتطوع
-     */
+   
     private function calculateRank($volunteerId)
     {
         $points = VolunterProfile::where('id', $volunteerId)->value('points') ?? 0;
         return VolunterProfile::where('points', '>', $points)->count() + 1;
     }
 
-    /**
-     * الحصول على شارة الترتيب
-     */
+   
     private function getRankBadge($rank)
     {
         return match($rank) {
@@ -1029,9 +970,7 @@ class VolunteerTaskController extends Controller
         };
     }
 
-    /**
-     * تحديث النقاط
-     */
+    
     private function updatePoints($volunteer, $duration)
     {
         $pointsEarned = round($duration * 10);
@@ -1039,28 +978,26 @@ class VolunteerTaskController extends Controller
         $this->updateBadges($volunteer);
     }
 
-    /**
-     * تحديث الشارات
-     */
+    
     private function updateBadges($volunteer)
     {
         $points = $volunteer->points ?? 0;
         $badges = [];
 
         if ($points >= 500) {
-            $badges[] = ['name' => 'نشط', 'icon' => '🔥', 'description' => '500+ نقطة'];
+            $badges[] = ['name' => 'نشط',  'description' => '500+ نقطة'];
         }
         if ($points >= 1000) {
-            $badges[] = ['name' => 'ممتاز', 'icon' => '⭐', 'description' => '1000+ نقطة'];
+            $badges[] = ['name' => 'ممتاز', 'description' => '1000+ نقطة'];
         }
         if ($points >= 2000) {
-            $badges[] = ['name' => 'إنساني', 'icon' => '❤️', 'description' => '2000+ نقطة'];
+            $badges[] = ['name' => 'إنساني', 'description' => '2000+ نقطة'];
         }
         if ($points >= 3000) {
-            $badges[] = ['name' => 'أسطورة', 'icon' => '🏆', 'description' => '3000+ نقطة'];
+            $badges[] = ['name' => 'أسطورة', 'description' => '3000+ نقطة'];
         }
         if ($points >= 5000) {
-            $badges[] = ['name' => 'نشط جدا', 'icon' => '🔥🔥', 'description' => '5000+ نقطة'];
+            $badges[] = ['name' => 'نشط جدا', 'description' => '5000+ نقطة'];
         }
 
         foreach ($badges as $badgeData) {
