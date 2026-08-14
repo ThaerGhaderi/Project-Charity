@@ -3,7 +3,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Requests\EvaluateVolunteerTaskRequest;
 use App\Models\VolunteerTask;
 use App\Models\VolunteerCheckIn;
 use App\Models\VolunteerEvaluation;
@@ -17,16 +16,12 @@ use Illuminate\Support\Facades\DB;
 
 class VolunteerTaskController extends Controller
 {
-    /**
-     * عرض جميع مهام المتطوع (الخاصة به فقط)
-     *
-     * @api {get} /api/volunteer/tasks Get My Tasks
-     * @apiHeader Authorization Bearer {token}
-     */
+   
     public function index(Request $request)
     {
         $user = $request->user();
-$volunteer = $user->volunterProfile;
+        $volunteer = $user->volunterProfile;
+        
         if (!$volunteer) {
             return response()->json([
                 'code' => '404',
@@ -35,16 +30,15 @@ $volunteer = $user->volunterProfile;
             ], 404);
         }
 
-        // ✅ عرض المهام الخاصة بالمستخدم فقط
         $query = VolunteerTask::where('volunteer_id', $volunteer->id)
-            ->with(['supervisor', 'beneficiary', 'aidApplication', 'visit', 'campaign']);
+            ->with(['supervisor', 'beneficiary', 'aidApplication', 'visit', 'campaign', 'checkIns']);
 
-        // ✅ تصفية حسب الحالة
+        // تصفية حسب الحالة
         if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
 
-        // ✅ تصفية حسب النوع
+        // تصفية حسب نوع المهمة
         if ($request->filled('filter')) {
             switch ($request->filter) {
                 case 'new':
@@ -56,10 +50,13 @@ $volunteer = $user->volunterProfile;
                 case 'completed':
                     $query->where('status', 'مكتملة');
                     break;
+                case 'pending':
+                    $query->where('status', 'معلقة');
+                    break;
             }
         }
 
-        // ✅ تصفية حسب المصدر
+        // تصفية حسب المصدر
         if ($request->filled('source')) {
             switch ($request->source) {
                 case 'beneficiary':
@@ -83,30 +80,41 @@ $volunteer = $user->volunterProfile;
 
         $tasks = $query->get();
 
-        // ✅ إضافة الخصائص المحسوبة
+        // إضافة الخصائص المحسوبة
         $tasks->transform(function ($task) {
             $task->status_text = $task->status_text;
             $task->elapsed_time = $task->formatted_elapsed_time;
             $task->is_in_progress = $task->is_in_progress;
             $task->is_completed = $task->is_completed;
             $task->is_new = $task->is_new;
+            $task->is_pending = $task->status === 'معلقة';
             $task->source_type = $task->source_type;
             $task->source_name = $task->source_name;
             $task->beneficiary_name = $task->beneficiary_name;
+            
+            // ✅ معلومات طلب الحضور والانصراف من check-ins
+            $latestCheckIn = $task->checkIns->last();
+            if ($latestCheckIn) {
+                $task->check_in_status = $latestCheckIn->status;
+                $task->check_in_time = $latestCheckIn->check_in_time?->format('Y-m-d H:i:s');
+                $task->check_out_time = $latestCheckIn->check_out_time?->format('Y-m-d H:i:s');
+                $task->is_check_in_pending = $latestCheckIn->status === 'حاضر' && !$latestCheckIn->check_out_time;
+                $task->is_check_out_pending = $latestCheckIn->status === 'منصرف' && $latestCheckIn->check_out_time;
+                $task->is_checked_in = $latestCheckIn->status === 'حاضر' && !$latestCheckIn->check_out_time;
+                $task->is_checked_out = $latestCheckIn->status === 'منصرف';
+            }
 
             if ($task->campaign) {
                 $task->campaign_title = $task->campaign->title;
                 $task->campaign_progress = $task->campaign->progress_percentage;
             }
 
-            // ✅ معلومات طلب المساعدة
             if ($task->aidApplication) {
                 $task->aid_type = $task->aidApplication->type;
                 $task->aid_status = $task->aidApplication->status;
                 $task->aid_is_urgent = $task->aidApplication->is_urgent;
             }
 
-            // ✅ معلومات الزيارة
             if ($task->visit) {
                 $task->visit_date = $task->visit->formatted_date;
                 $task->visit_time = $task->visit->formatted_time;
@@ -115,12 +123,13 @@ $volunteer = $user->volunterProfile;
             return $task;
         });
 
-        // ✅ إحصائيات
+        // إحصائيات
         $stats = [
             'total' => $tasks->count(),
             'new' => $tasks->where('status', 'جديدة')->count(),
             'in_progress' => $tasks->where('status', 'قيد التنفيذ')->count(),
             'completed' => $tasks->where('status', 'مكتملة')->count(),
+            'pending' => $tasks->where('status', 'معلقة')->count(),
             'cancelled' => $tasks->where('status', 'ملغية')->count(),
             'from_beneficiaries' => $tasks->whereNotNull('beneficiary_id')->count(),
             'from_aid_applications' => $tasks->whereNotNull('aid_application_id')->count(),
@@ -139,13 +148,14 @@ $volunteer = $user->volunterProfile;
                     'id' => $volunteer->id,
                     'name' => $user->name,
                     'total_hours' => $volunteer->total_hours,
+                    'is_available' => $this->isVolunteerAvailable($volunteer->id),
                 ]
             ]
         ], 200);
     }
 
     /**
-     * ✅ عرض المهام المفتوحة للجميع (بدون متطوع محدد)
+     * عرض المهام المفتوحة للجميع (بدون متطوع محدد)
      *
      * @api {get} /api/volunteer/tasks/available Get Available Tasks
      * @apiHeader Authorization Bearer {token}
@@ -153,7 +163,7 @@ $volunteer = $user->volunterProfile;
     public function availableTasks(Request $request)
     {
         $user = $request->user();
-        $volunteer = $user->volunteer;
+        $volunteer = $user->volunterProfile;
 
         if (!$volunteer) {
             return response()->json([
@@ -163,7 +173,20 @@ $volunteer = $user->volunterProfile;
             ], 404);
         }
 
-        // ✅ المهام المفتوحة (بدون متطوع)
+        // ✅ التحقق من أن المتطوع متاح
+        if (!$this->isVolunteerAvailable($volunteer->id)) {
+            return response()->json([
+                'code' => '403',
+                'success' => false,
+                'message' => 'غير متاح حالياً، لديك مهام معلقة أو قيد التنفيذ',
+                'data' => [
+                    'has_pending_tasks' => $this->hasPendingTasks($volunteer->id),
+                    'has_in_progress_tasks' => $this->hasInProgressTasks($volunteer->id),
+                ]
+            ], 403);
+        }
+
+        // المهام المفتوحة (بدون متطوع)
         $query = VolunteerTask::whereNull('volunteer_id')
             ->where('status', 'جديدة')
             ->with(['supervisor', 'beneficiary', 'visit', 'campaign', 'aidApplication']);
@@ -186,7 +209,7 @@ $volunteer = $user->volunterProfile;
             }
         }
 
-        // ✅ تصفية حسب نوع المهمة
+        // تصفية حسب نوع المهمة
         if ($request->filled('type')) {
             switch ($request->type) {
                 case 'visit':
@@ -233,7 +256,6 @@ $volunteer = $user->volunterProfile;
                 $task->visit_time = $task->visit->formatted_time;
             }
 
-            // ✅ معلومات طلب المساعدة
             if ($task->aidApplication) {
                 $task->aid_type = $task->aidApplication->type;
                 $task->aid_status = $task->aidApplication->status;
@@ -244,7 +266,7 @@ $volunteer = $user->volunterProfile;
             return $task;
         });
 
-        // ✅ إحصائيات المهام المتاحة
+        // إحصائيات المهام المتاحة
         $stats = [
             'total' => $tasks->count(),
             'from_visits' => $tasks->whereNotNull('visit_id')->count(),
@@ -265,6 +287,7 @@ $volunteer = $user->volunterProfile;
                 'volunteer' => [
                     'id' => $volunteer->id,
                     'name' => $user->name,
+                    'is_available' => true,
                 ]
             ]
         ], 200);
@@ -279,7 +302,7 @@ $volunteer = $user->volunterProfile;
     public function show($id, Request $request)
     {
         $user = $request->user();
-$volunteer = $user->volunterProfile;
+        $volunteer = $user->volunterProfile;
 
         if (!$volunteer) {
             return response()->json([
@@ -289,21 +312,19 @@ $volunteer = $user->volunterProfile;
             ], 404);
         }
 
-        // ✅ البحث عن المهمة (بدون شرط volunteer_id للسماح برؤية المهام المفتوحة)
-     $task = VolunteerTask::where('id', $id)
-        ->with(['supervisor', 'checkIns', 'beneficiary', 'aidApplication', 'visit', 'campaign'])
-        ->first();
+        $task = VolunteerTask::where('id', $id)
+            ->with(['supervisor', 'checkIns', 'beneficiary', 'aidApplication', 'visit', 'campaign'])
+            ->first();
 
-    if (!$task) {
-        return response()->json([
-            'code' => '404',
-            'success' => false,
-            'message' => 'المهمة غير موجودة',
-        ], 404);
-    }
+        if (!$task) {
+            return response()->json([
+                'code' => '404',
+                'success' => false,
+                'message' => 'المهمة غير موجودة',
+            ], 404);
+        }
 
-
-        // ✅ التحقق من أن المتطوع لديه صلاحية (مهمته أو مفتوحة)
+        // التحقق من أن المتطوع لديه صلاحية
         if ($task->volunteer_id && $task->volunteer_id != $volunteer->id) {
             return response()->json([
                 'code' => '403',
@@ -317,11 +338,26 @@ $volunteer = $user->volunterProfile;
         $task->is_in_progress = $task->is_in_progress;
         $task->is_completed = $task->is_completed;
         $task->is_new = $task->is_new;
+        $task->is_pending = $task->status === 'معلقة';
         $task->source_type = $task->source_type;
         $task->source_name = $task->source_name;
         $task->beneficiary_name = $task->beneficiary_name;
 
-        // ✅ معلومات إضافية حسب المصدر
+        // ✅ معلومات الحضور والانصراف من check-ins
+        $latestCheckIn = $task->checkIns->last();
+        if ($latestCheckIn) {
+            $task->check_in_status = $latestCheckIn->status;
+            $task->check_in_time = $latestCheckIn->check_in_time?->format('Y-m-d H:i:s');
+            $task->check_out_time = $latestCheckIn->check_out_time?->format('Y-m-d H:i:s');
+            $task->is_checked_in = $latestCheckIn->status === 'حاضر' && !$latestCheckIn->check_out_time;
+            $task->is_checked_out = $latestCheckIn->status === 'منصرف';
+            $task->check_in_notes = $latestCheckIn->notes;
+            $task->location_verified = $latestCheckIn->location_verified;
+            $task->latitude = $latestCheckIn->latitude;
+            $task->longitude = $latestCheckIn->longitude;
+        }
+
+        // معلومات إضافية حسب المصدر
         if ($task->aidApplication) {
             $task->aid_details = [
                 'type' => $task->aidApplication->type,
@@ -364,15 +400,18 @@ $volunteer = $user->volunterProfile;
     }
 
     /**
-     * بدء المهمة (تسجيل الحضور) - يدعم المهام المفتوحة
+     * طلب بدء المهمة (تسجيل حضور)
+     * 
+     * ✅ المتطوع يسجل حضور، والمهمة تصبح "معلقة" لحين موافقة الأدمن
      *
-     * @api {post} /api/volunteer/tasks/{id}/start Start Task
+     * @api {post} /api/volunteer/tasks/{id}/request-start Request Start Task
      * @apiHeader Authorization Bearer {token}
      */
-    public function startTask($id, Request $request)
+    public function requestStartTask($id, Request $request)
     {
         $user = $request->user();
-$volunteer = $user->volunterProfile;
+        $volunteer = $user->volunterProfile;
+        
         if (!$volunteer) {
             return response()->json([
                 'code' => '404',
@@ -381,7 +420,7 @@ $volunteer = $user->volunterProfile;
             ], 404);
         }
 
-        // ✅ البحث عن المهمة (بدون شرط volunteer_id)
+        // البحث عن المهمة
         $task = VolunteerTask::find($id);
 
         if (!$task) {
@@ -397,11 +436,12 @@ $volunteer = $user->volunterProfile;
             return response()->json([
                 'code' => '400',
                 'success' => false,
-                'message' => 'لا يمكن بدء مهمة غير جديدة',
+                'message' => 'لا يمكن طلب بدء مهمة غير جديدة',
+                'current_status' => $task->status,
             ], 400);
         }
 
-        // ✅ ✅ ✅ إذا كانت المهمة مفتوحة (بدون متطوع)، خصصها لهذا المتطوع
+        // ✅ إذا كانت المهمة مفتوحة، خصصها لهذا المتطوع
         if (!$task->volunteer_id) {
             $task->update(['volunteer_id' => $volunteer->id]);
             $task->refresh();
@@ -417,35 +457,40 @@ $volunteer = $user->volunterProfile;
             ], 403);
         }
 
-        // ✅ التحقق من وجود تسجيل حضور سابق
-        $existingCheckIn = VolunteerCheckIn::where('task_id', $task->id)
+        // ✅ التحقق من وجود تسجيل حضور نشط
+        $existingActiveCheckIn = VolunteerCheckIn::where('task_id', $task->id)
             ->where('volunteer_id', $volunteer->id)
             ->whereNull('check_out_time')
             ->first();
 
-        if ($existingCheckIn) {
+        if ($existingActiveCheckIn) {
             return response()->json([
                 'code' => '400',
                 'success' => false,
-                'message' => 'لديك تسجيل حضور نشط بالفعل لهذه المهمة',
+                'message' => 'لديك تسجيل حضور نشط لهذه المهمة بالفعل',
+                'check_in_time' => $existingActiveCheckIn->check_in_time->format('Y-m-d H:i:s'),
             ], 400);
         }
 
         try {
             DB::beginTransaction();
 
+            // ✅ إنشاء تسجيل حضور (حاضر) مع بقاء check_out_time = null
             $checkIn = VolunteerCheckIn::create([
                 'task_id' => $task->id,
                 'volunteer_id' => $volunteer->id,
                 'check_in_time' => now(),
+                'check_out_time' => null,
+                'status' => 'حاضر', // ✅ الحضور مسجل
                 'location_verified' => true,
                 'latitude' => $request->latitude ?? null,
                 'longitude' => $request->longitude ?? null,
-                'status' => 'حاضر',
+                'notes' => $request->notes ?? 'بانتظار موافقة الأدمن',
             ]);
 
+            // ✅ تحديث حالة المهمة إلى "معلقة" (بانتظار موافقة الأدمن)
             $task->update([
-                'status' => 'قيد التنفيذ',
+                'status' => 'معلقة',
                 'start_time' => now(),
             ]);
 
@@ -454,11 +499,12 @@ $volunteer = $user->volunterProfile;
             return response()->json([
                 'code' => '200',
                 'success' => true,
-                'message' => 'تم تسجيل الحضور بنجاح',
+                'message' => 'تم تسجيل الحضور بنجاح، المهمة معلقة بانتظار موافقة الأدمن',
                 'data' => [
                     'task' => $task,
                     'check_in' => $checkIn,
-                    'elapsed_time' => $task->formatted_elapsed_time,
+                    'status' => 'معلقة',
+                    'message_ar' => 'تم تسجيل حضورك، ينتظر الأدمن لتأكيد بدء المهمة',
                     'assigned_to_you' => true,
                 ]
             ], 200);
@@ -468,19 +514,21 @@ $volunteer = $user->volunterProfile;
             return response()->json([
                 'code' => '500',
                 'success' => false,
-                'message' => 'حدث خطأ أثناء بدء المهمة',
+                'message' => 'حدث خطأ أثناء تسجيل الحضور',
                 'error' => $e->getMessage(),
             ], 500);
         }
     }
 
     /**
-     * إنهاء المهمة (تسجيل الانصراف)
+     * طلب إنهاء المهمة (تسجيل انصراف)
+     * 
+     * ✅ المتطوع يسجل انصراف، والمهمة تبقى "معلقة" لحين موافقة الأدمن
      *
-     * @api {post} /api/volunteer/tasks/{id}/end End Task
+     * @api {post} /api/volunteer/tasks/{id}/request-end Request End Task
      * @apiHeader Authorization Bearer {token}
      */
-    public function endTask($id, Request $request)
+    public function requestEndTask($id, Request $request)
     {
         $user = $request->user();
         $volunteer = $user->volunterProfile;
@@ -493,25 +541,36 @@ $volunteer = $user->volunterProfile;
             ], 404);
         }
 
-     $task = VolunteerTask::find($id);
+        $task = VolunteerTask::find($id);
 
-if (!$task) {
-    return response()->json([
-        'code' => '404',
-        'success' => false,
-        'message' => 'المهمة غير موجودة',
-    ], 404);
-}
+        if (!$task) {
+            return response()->json([
+                'code' => '404',
+                'success' => false,
+                'message' => 'المهمة غير موجودة',
+            ], 404);
+        }
 
-
-        if ($task->status !== 'قيد التنفيذ') {
+        // ✅ التحقق: المهمة في حالة قيد التنفيذ أو معلقة
+        if (!in_array($task->status, ['قيد التنفيذ', 'معلقة'])) {
             return response()->json([
                 'code' => '400',
                 'success' => false,
-                'message' => 'المهمة ليست قيد التنفيذ',
+                'message' => 'لا يمكن طلب انصراف لمهمة ليست قيد التنفيذ أو معلقة',
+                'current_status' => $task->status,
             ], 400);
         }
 
+        // ✅ التحقق: المهمة مخصصة لهذا المتطوع
+        if ($task->volunteer_id != $volunteer->id) {
+            return response()->json([
+                'code' => '403',
+                'success' => false,
+                'message' => 'هذه المهمة غير مخصصة لك',
+            ], 403);
+        }
+
+        // ✅ البحث عن تسجيل حضور نشط (بدون انصراف)
         $checkIn = VolunteerCheckIn::where('task_id', $task->id)
             ->where('volunteer_id', $volunteer->id)
             ->whereNull('check_out_time')
@@ -528,84 +587,32 @@ if (!$task) {
         try {
             DB::beginTransaction();
 
+            // ✅ تحديث تسجيل الحضور بتسجيل الانصراف
             $checkIn->update([
                 'check_out_time' => now(),
-                'status' => 'منصرف',
+                'status' => 'منصرف', // ✅ تم الانصراف
+                'notes' => $request->notes ?? 'بانتظار موافقة الأدمن',
             ]);
 
-            $duration = $checkIn->check_in_time->diffInHours($checkIn->check_out_time);
-
+            // ✅ تحديث حالة المهمة إلى "معلقة" (بانتظار موافقة الأدمن)
             $task->update([
-                'status' => 'مكتملة',
+                'status' => 'معلقة',
                 'end_time' => now(),
-                'completed_at' => now(),
-                'progress_percentage' => 100,
             ]);
-
-            $volunteer->update([
-                'total_hours' => $volunteer->total_hours + $duration,
-            ]);
-
-            VolunteerEvaluation::create([
-                'volunteer_id' => $volunteer->id,
-                'task_id' => $task->id,
-                'supervisor_id' => $task->supervisor_id,
-                'rating' => null,
-                'feedback' => null,
-                'evaluated_at' => null,
-            ]);
-
-            // ✅ تحديث حالة طلب المساعدة إذا كانت المهمة مرتبطة به
-            if ($task->aidApplication) {
-                $task->aidApplication->update([
-                    'status' => 'completed',
-                    'completed_at' => now(),
-                ]);
-
-                // ✅ إشعار للمستفيد صاحب طلب المساعدة
-                Notification::sendPushOnly(
-                    $task->aidApplication->user_id,
-                    '✅ تم إكمال طلب المساعدة',
-                    "تم إكمال طلب المساعدة '{$task->title}' بواسطة المتطوع {$user->name}",
-                    'aid_completed',
-                    ['application_id' => $task->aidApplication->id]
-                );
-            }
-
-            // ✅ تحديث حالة الزيارة إذا كانت المهمة مرتبطة بها
-            if ($task->visit) {
-                $task->visit->update(['status' => 'مكتملة']);
-            }
-
-            // ✅ تحديث الشهادات
-            $this->updateCertificates($volunteer);
-            $this->updatePoints($volunteer, $duration);
-
-            // ✅ إشعار للمستفيد (إذا كان هناك مستفيد مباشر)
-            if ($task->beneficiary_id) {
-                Notification::sendPushOnly(
-                    $task->beneficiary_id,
-                    '✅ تم إكمال المهمة',
-                    "تم إكمال المهمة '{$task->title}' بواسطة المتطوع {$user->name}",
-                    'task_completed',
-                    ['task_id' => $task->id]
-                );
-            }
 
             DB::commit();
 
             return response()->json([
                 'code' => '200',
                 'success' => true,
-                'message' => 'تم تسجيل الانصراف بنجاح',
+                'message' => 'تم تسجيل الانصراف بنجاح، المهمة معلقة بانتظار موافقة الأدمن',
                 'data' => [
                     'task' => $task,
                     'check_in' => $checkIn,
-                    'duration_hours' => round($duration, 2),
-                    'total_hours' => $volunteer->total_hours,
-                    'certificates_updated' => true,
-                    'aid_application_updated' => $task->aidApplication ? true : false,
-                    'visit_updated' => $task->visit ? true : false,
+                    'status' => 'معلقة',
+                    'message_ar' => 'تم تسجيل انصرافك، ينتظر الأدمن لتأكيد إكمال المهمة',
+                    'check_in_time' => $checkIn->check_in_time->format('Y-m-d H:i:s'),
+                    'check_out_time' => $checkIn->check_out_time->format('Y-m-d H:i:s'),
                 ]
             ], 200);
 
@@ -614,22 +621,19 @@ if (!$task) {
             return response()->json([
                 'code' => '500',
                 'success' => false,
-                'message' => 'حدث خطأ أثناء إنهاء المهمة',
+                'message' => 'حدث خطأ أثناء تسجيل الانصراف',
                 'error' => $e->getMessage(),
             ], 500);
         }
     }
 
-    /**
-     * الحصول على المهمة الحالية للمتطوع
-     *
-     * @api {get} /api/volunteer/tasks/current Get Current Task
-     * @apiHeader Authorization Bearer {token}
-     */
+  
+  
     public function currentTask(Request $request)
     {
         $user = $request->user();
-$volunteer = $user->volunterProfile;
+        $volunteer = $user->volunterProfile;
+        
         if (!$volunteer) {
             return response()->json([
                 'code' => '404',
@@ -638,8 +642,9 @@ $volunteer = $user->volunterProfile;
             ], 404);
         }
 
+        // ✅ البحث عن مهمة نشطة (قيد التنفيذ أو معلقة)
         $task = VolunteerTask::where('volunteer_id', $volunteer->id)
-            ->where('status', 'قيد التنفيذ')
+            ->whereIn('status', ['قيد التنفيذ', 'معلقة'])
             ->with(['supervisor', 'checkIns', 'beneficiary', 'aidApplication', 'visit', 'campaign'])
             ->first();
 
@@ -655,15 +660,77 @@ $volunteer = $user->volunterProfile;
         $task->status_text = $task->status_text;
         $task->elapsed_time = $task->formatted_elapsed_time;
         $task->is_in_progress = $task->is_in_progress;
+        $task->is_pending = $task->status === 'معلقة';
         $task->source_type = $task->source_type;
         $task->source_name = $task->source_name;
         $task->beneficiary_name = $task->beneficiary_name;
+
+        $latestCheckIn = $task->checkIns->last();
+        if ($latestCheckIn) {
+            $task->check_in_time = $latestCheckIn->check_in_time?->format('Y-m-d H:i:s');
+            $task->check_out_time = $latestCheckIn->check_out_time?->format('Y-m-d H:i:s');
+            $task->is_checked_in = $latestCheckIn->status === 'حاضر' && !$latestCheckIn->check_out_time;
+            $task->is_checked_out = $latestCheckIn->status === 'منصرف';
+        }
 
         return response()->json([
             'code' => '200',
             'success' => true,
             'message' => 'تم جلب المهمة الحالية بنجاح',
             'data' => $task
+        ], 200);
+    }
+
+    /**
+     * الحصول على طلبات المتطوع المعلقة
+     *
+     * @api {get} /api/volunteer/tasks/pending-requests Get Pending Requests
+     * @apiHeader Authorization Bearer {token}
+     */
+    public function pendingRequests(Request $request)
+    {
+        $user = $request->user();
+        $volunteer = $user->volunterProfile;
+
+        if (!$volunteer) {
+            return response()->json([
+                'code' => '404',
+                'success' => false,
+                'message' => 'لم يتم العثور على ملف المتطوع',
+            ], 404);
+        }
+
+        // ✅ المهام المعلقة (بانتظار موافقة الأدمن)
+        $pendingTasks = VolunteerTask::where('volunteer_id', $volunteer->id)
+            ->where('status', 'معلقة')
+            ->with(['checkIns'])
+            ->get();
+
+        $result = $pendingTasks->map(function($task) {
+            $checkIn = $task->checkIns->last();
+            $isCheckInRequest = $checkIn && $checkIn->status === 'حاضر' && !$checkIn->check_out_time;
+            $isCheckOutRequest = $checkIn && $checkIn->status === 'منصرف';
+
+            return [
+                'id' => $task->id,
+                'title' => $task->title,
+                'status' => 'معلقة',
+                'request_type' => $isCheckOutRequest ? 'انصراف' : ($isCheckInRequest ? 'حضور' : 'غير معروف'),
+                'requested_at' => $checkIn?->check_in_time?->format('Y-m-d H:i:s') ?? $task->created_at->format('Y-m-d H:i:s'),
+                'check_in_time' => $checkIn?->check_in_time?->format('Y-m-d H:i:s'),
+                'check_out_time' => $checkIn?->check_out_time?->format('Y-m-d H:i:s'),
+                'notes' => $checkIn?->notes,
+            ];
+        });
+
+        return response()->json([
+            'code' => '200',
+            'success' => true,
+            'message' => 'تم جلب الطلبات المعلقة بنجاح',
+            'data' => [
+                'pending_requests' => $result,
+                'total_pending' => $result->count(),
+            ]
         ], 200);
     }
 
@@ -676,7 +743,8 @@ $volunteer = $user->volunterProfile;
     public function evaluations(Request $request)
     {
         $user = $request->user();
-$volunteer = $user->volunterProfile;
+        $volunteer = $user->volunterProfile;
+        
         if (!$volunteer) {
             return response()->json([
                 'code' => '404',
@@ -719,7 +787,8 @@ $volunteer = $user->volunterProfile;
     public function statistics(Request $request)
     {
         $user = $request->user();
-$volunteer = $user->volunterProfile;
+        $volunteer = $user->volunterProfile;
+        
         if (!$volunteer) {
             return response()->json([
                 'code' => '404',
@@ -741,8 +810,13 @@ $volunteer = $user->volunterProfile;
             'total_tasks' => VolunteerTask::where('volunteer_id', $volunteer->id)->count(),
             'in_progress' => VolunteerTask::where('volunteer_id', $volunteer->id)
                 ->where('status', 'قيد التنفيذ')->count(),
+            'pending' => VolunteerTask::where('volunteer_id', $volunteer->id)
+                ->where('status', 'معلقة')->count(),
             'new_tasks' => VolunteerTask::where('volunteer_id', $volunteer->id)
                 ->where('status', 'جديدة')->count(),
+            'completed' => $completedTasks,
+            'cancelled' => VolunteerTask::where('volunteer_id', $volunteer->id)
+                ->where('status', 'ملغية')->count(),
             'certificates' => VolunteerCertificate::where('volunteer_id', $volunteer->id)->count(),
         ];
 
@@ -754,6 +828,7 @@ $volunteer = $user->volunterProfile;
                 'volunteer' => [
                     'id' => $volunteer->id,
                     'name' => $user->name,
+                    'is_available' => $this->isVolunteerAvailable($volunteer->id),
                 ],
                 'statistics' => [
                     'total_hours' => round($totalHours, 1),
@@ -761,7 +836,9 @@ $volunteer = $user->volunterProfile;
                     'average_rating' => round($averageRating, 1),
                     'total_tasks' => $stats['total_tasks'],
                     'in_progress' => $stats['in_progress'],
+                    'pending' => $stats['pending'],
                     'new_tasks' => $stats['new_tasks'],
+                    'cancelled' => $stats['cancelled'],
                     'certificates' => $stats['certificates'],
                 ]
             ]
@@ -812,7 +889,8 @@ $volunteer = $user->volunterProfile;
     public function leaderboard(Request $request)
     {
         $user = $request->user();
-$volunteer = $user->volunterProfile;
+        $volunteer = $user->volunterProfile;
+        
         if (!$volunteer) {
             return response()->json([
                 'code' => '404',
@@ -853,7 +931,51 @@ $volunteer = $user->volunterProfile;
     // ==================== PRIVATE METHODS ====================
 
     /**
-     * تحديث الشهادات تلقائياً عند إكمال المهام
+     * التحقق من توفر المتطوع
+     */
+    private function isVolunteerAvailable($volunteerId)
+    {
+        // ✅ غير متاح إذا كان لديه:
+        // 1. مهام بحالة "قيد التنفيذ"
+        // 2. مهام بحالة "معلقة"
+        $hasInProgressTasks = VolunteerTask::where('volunteer_id', $volunteerId)
+            ->where('status', 'قيد التنفيذ')
+            ->exists();
+
+        $hasPendingTasks = VolunteerTask::where('volunteer_id', $volunteerId)
+            ->where('status', 'معلقة')
+            ->exists();
+
+        // ✅ التحقق من وجود تسجيل حضور نشط (دون انصراف)
+        $hasActiveCheckIn = VolunteerCheckIn::where('volunteer_id', $volunteerId)
+            ->whereNull('check_out_time')
+            ->exists();
+
+        return !($hasInProgressTasks || $hasPendingTasks || $hasActiveCheckIn);
+    }
+
+    /**
+     * التحقق من وجود مهام معلقة
+     */
+    private function hasPendingTasks($volunteerId)
+    {
+        return VolunteerTask::where('volunteer_id', $volunteerId)
+            ->where('status', 'معلقة')
+            ->exists();
+    }
+
+    /**
+     * التحقق من وجود مهام قيد التنفيذ
+     */
+    private function hasInProgressTasks($volunteerId)
+    {
+        return VolunteerTask::where('volunteer_id', $volunteerId)
+            ->where('status', 'قيد التنفيذ')
+            ->exists();
+    }
+
+    /**
+     * تحديث الشهادات
      */
     private function updateCertificates($volunteer)
     {
@@ -908,7 +1030,7 @@ $volunteer = $user->volunterProfile;
     }
 
     /**
-     * تحديث النقاط تلقائياً عند إكمال المهمة
+     * تحديث النقاط
      */
     private function updatePoints($volunteer, $duration)
     {
@@ -918,7 +1040,7 @@ $volunteer = $user->volunterProfile;
     }
 
     /**
-     * تحديث الشارات بناءً على النقاط
+     * تحديث الشارات
      */
     private function updateBadges($volunteer)
     {
@@ -952,160 +1074,4 @@ $volunteer = $user->volunterProfile;
             ]);
         }
     }
- public function pendingEvaluation(Request $request)
-    {
-        $query = VolunteerTask::where('status', 'مكتملة')
-            ->whereHas('evaluation', function ($q) {
-                $q->whereNull('rating');
-            })
-            ->with(['volunteer.user', 'supervisor', 'campaign', 'beneficiary']);
-
-        if ($request->filled('supervisor_id')) {
-            $query->where('supervisor_id', $request->supervisor_id);
-        }
-
-        $tasks = $query->orderBy('completed_at', 'desc')->paginate(20);
-
-        return response()->json([
-            'code' => '200',
-            'success' => true,
-            'message' => 'تم جلب المهام بانتظار التقييم بنجاح',
-            'data' => $tasks,
-        ], 200);
-    }
-    public function evaluate($id, EvaluateVolunteerTaskRequest $request)
-    {
-       $admin = $request->user(); // ممكن يكون null الآن
-
-    $task = VolunteerTask::with(['volunteer.user', 'evaluation'])->find($id);
-
-    if (!$task) {
-        return response()->json([
-            'code' => '404',
-            'success' => false,
-            'message' => 'المهمة غير موجودة',
-        ], 404);
-    }
-
-    if ($task->status !== 'مكتملة') {
-        return response()->json([
-            'code' => '400',
-            'success' => false,
-            'message' => 'لا يمكن تقييم مهمة غير مكتملة',
-        ], 400);
-    }
-
-    try {
-        DB::beginTransaction();
-
-        $evaluation = $task->evaluation()->first()
-            ?? VolunteerEvaluation::firstOrNew([
-                'task_id' => $task->id,
-                'volunteer_id' => $task->volunteer_id,
-            ]);
-
-        $isFirstTimeEvaluation = is_null($evaluation->rating);
-
-        $evaluation->rating = $request->rating;
-        $evaluation->feedback = $request->feedback;
-        $evaluation->supervisor_id = $admin?->id; // ✅ null-safe operator بدل $admin->id
-        $evaluation->evaluated_at = now();
-        $evaluation->save();
-
-        DB::commit();
-
-        if ($task->volunteer && $task->volunteer->user) {
-            Notification::sendPushOnly(
-                $task->volunteer->user->id,
-                '⭐ تم تقييم مهمتك',
-                "حصلت على تقييم {$evaluation->rating}/10 لمهمة '{$task->title}'",
-                'task_evaluated',
-                ['task_id' => $task->id, 'rating' => $evaluation->rating]
-            );
-        }
-
-        return response()->json([
-            'code' => '200',
-            'success' => true,
-            'message' => $isFirstTimeEvaluation ? 'تم تقييم المهمة بنجاح' : 'تم تحديث التقييم بنجاح',
-            'data' => [
-                'evaluation' => $evaluation,
-                'task' => [
-                    'id' => $task->id,
-                    'title' => $task->title,
-                ],
-                'volunteer' => [
-                    'id' => $task->volunteer_id,
-                    'name' => $task->volunteer?->user?->name,
-                ],
-            ],
-        ], 200);
-
-    } catch (\Exception $e) {
-        DB::rollBack();
-        return response()->json([
-            'code' => '500',
-            'success' => false,
-            'message' => 'حدث خطأ أثناء تقييم المهمة',
-            'error' => $e->getMessage(),
-        ], 500);
-    }
-    }
-    // app/Http/Controllers/Api/VolunteerTaskController.php
-
-public function store(Request $request)
-{
-    $validated = $request->validate([
-        'title'          => 'required|string|max:255',
-        'type_id'        => 'nullable|exists:types,id',
-        'priority'       => 'nullable|in:منخفضة,متوسطة,عالية,عاجلة',
-        'due_date'       => 'nullable|date|after_or_equal:today',
-        'location'       => 'nullable|string|max:255',
-        'description'    => 'nullable|string',
-
-        'volunteer_id'      => 'nullable|exists:volunter_profiles,id',
-        'campaign_id'       => 'nullable|exists:campaigns,id',
-        'visit_id'          => 'nullable|exists:visits,id',
-        'aid_application_id'=> 'nullable|exists:aid_applications,id',
-        'beneficiary_id'    => 'nullable|exists:users,id',
-    ]);
-
-    $task = VolunteerTask::create([
-        ...$validated,
-        'supervisor_id' => null,
-        'status' => $validated['volunteer_id'] ?? null ? 'قيد التنفيذ' : 'جديدة',
-        'start_time' => $validated['volunteer_id'] ?? null ? now() : null,
-    ]);
-    return response()->json([
-        'message' => 'تم إنشاء المهمة بنجاح',
-        'data' => $task->load('volunteer.user', 'type', 'supervisor'),
-    ], 201);
 }
-public function assign(Request $request, VolunteerTask $task)
-{
-    $validated = $request->validate([
-        'volunteer_id' => 'required|exists:volunter_profiles,id',
-    ]);
-    $volunteer = VolunterProfile::findOrFail($validated['volunteer_id']);
-
-    if ($volunteer->status !== 'متاح') {
-        return response()->json([
-            'message' => 'هذا المتطوع غير متاح حالياً',
-        ], 422);
-    }
-    $task->update([
-        'volunteer_id'   => $volunteer->id,
-        'supervisor_id'  => $task->supervisor_id ?? null,
-        'status'         => 'قيد التنفيذ',
-        'start_time'     => now(),
-    ]);
-    $volunteer->update(['status' => 'مشغول']);
-    return response()->json([
-        'message' => 'تم إسناد المهمة للمتطوع بنجاح',
-        'data' => $task->fresh()->load('volunteer.user', 'type'),
-    ]);
-}
-}
-
-
-
