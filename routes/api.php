@@ -23,6 +23,7 @@ use App\Http\Controllers\RefundController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SkillController;
 use App\Http\Controllers\SponsorshipController;
+use App\Http\Controllers\SponsorshipManagementController;
 use App\Http\Controllers\TypeController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VisitController;
@@ -329,6 +330,26 @@ Route::get('/download-donation', function () {
 
     return response()->json(['message' => 'الملف غير موجود في السيرفر'], 404);
 });
+
+Route::prefix('admin/sponsorships')->group(function () {
+    Route::get('', [SponsorshipManagementController::class, 'index']);
+    Route::post('store', [SponsorshipManagementController::class, 'store']); // تم تغييرها إلى POST
+    Route::get('dashboard', [SponsorshipManagementController::class, 'dashboard']);
+    
+    // راوتات الحذف (مهم: delete-all يجب أن تسبق {id})
+    Route::delete('delete-all', [SponsorshipManagementController::class, 'deleteAll']);
+    Route::delete('{id}', [SponsorshipManagementController::class, 'destroy']);
+
+    Route::get('{id}/show', [SponsorshipManagementController::class, 'show']);
+    Route::post('{id}/approve', [SponsorshipManagementController::class, 'approve']);
+    Route::post('{id}/reject', [SponsorshipManagementController::class, 'reject']);
+    Route::post('{id}/suspend', [SponsorshipManagementController::class, 'suspend']);
+    Route::post('{id}/resume', [SponsorshipManagementController::class, 'resume']);
+    Route::patch('{id}/notes', [SponsorshipManagementController::class, 'updateNotes']);
+});
+
+
+
 
 // ==================== SHARED ROUTES (Public) ====================
 Route::get('/cities', [CityController::class, 'index']);
