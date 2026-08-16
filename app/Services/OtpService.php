@@ -45,23 +45,31 @@ class OtpService
             'subject' => 'رمز التحقق الخاص بك (OTP) - Charity',
             'htmlContent' => '<h3>مرحباً بك في جمعية Charity</h3><p>رمز التحقق الخاص بك لتفعيل الحساب هو: <b style="font-size: 20px; color: #4F46E5;">' . $otpCode . '</b></p><p>هذا الرمز صالح لمدة 10 دقائق فقط.</p>'
         ];
-
-        curl_setopt_array($curl, [
-            CURLOPT_URL => 'https://brevo.com', // رابط الـ API الصحيح لـ Brevo
+curl_setopt_array($curl, [
+            // ✅ تم تصحيح الرابط هنا
+            CURLOPT_URL => 'https://api.brevo.com/v3/smtp/email',
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_POST => true,
             CURLOPT_POSTFIELDS => json_encode($postData),
-            CURLOPT_SSL_VERIFYPEER => false, // تخطي جدار فحص الشهادة الأمنية للاتصال الخارجي بالسيرفر
+            CURLOPT_SSL_VERIFYPEER => false,
             CURLOPT_SSL_VERIFYHOST => false,
             CURLOPT_HTTPHEADER => [
-                'api-key: ' . env('BREVO_API_KEY'), // جلب المفتاح السري النظيف من الـ Variables
+                'api-key: ' . env('BREVO_API_KEY'), // تأكد من إضافة هذا المتغير في Railway
                 'Content-Type: application/json',
                 'Accept: application/json'
             ],
         ]);
 
-        curl_exec($curl);
+        $response = curl_exec($curl);
+        $err = curl_error($curl);
         curl_close($curl);
+
+        // ✅ إضافة تسجيل الأخطاء لمعرفة سبب المشكلة إذا فشل الإرسال مستقبلاً
+        if ($err) {
+            \Illuminate\Support\Facades\Log::error("cURL Error in Brevo: #:" . $err);
+        } else {
+            \Illuminate\Support\Facades\Log::info("Brevo Response: " . $response);
+        }
 
         return $otp;
     }
