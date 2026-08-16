@@ -43,45 +43,50 @@ public function export()
     {
         //
     }
-    public function store(StoreDorationRequest $request)
+      public function store(StoreDorationRequest $request)
     {
        if ($request->has('donor_email')) {
-        $user = User::firstOrCreate(
-            ['email' => $request->donor_email],
-            [
-                'name'      => $request->name,
-                'password'  => bcrypt(str()->random(16)),
-                'role'      => 'Donor',
-                'is_active' => false,
-            ]
-        );
-    } else {
-        $user = User::firstOrCreate(
-            ['name' => $request->name],
-            [
-                'email'     => 'guest_' . str()->random(8) . '@anonymous.local',
-                'password'  => bcrypt(str()->random(16)),
-                'role'      => 'Donor',
-                'is_active' => false,
-            ]
-        );
-    }
+            $user = User::firstOrCreate(
+                ['email' => $request->donor_email],
+                [
+                    'name'      => $request->name,
+                    'password'  => bcrypt(str()->random(16)),
+                    'role'      => 'Donor',
+                    'is_active' => false,
+                ]
+            );
+        } else {
+            $user = User::firstOrCreate(
+                ['name' => $request->name],
+                [
+                    'email'     => 'guest_' . str()->random(8) . '@anonymous.local',
+                    'password'  => bcrypt(str()->random(16)),
+                    'role'      => 'Donor',
+                    'is_active' => false,
+                ]
+            );
+        }
+
         $donorProfile = DonorProfile::firstOrCreate(
             ['user_id' => $user->id],
             [
                 'donor_type'   => $request->donor_type ?? 'فردي',
                 'is_anonymous' => $request->is_anonymous ?? false,
-                'bio'          => " ",
+                'bio'          => $request->bio ?? " ",
             ]
         );
+
+        // 👈 قمنا بإضافة status و description لنحفظها كما ترسلها الواجهة
         $doration = $donorProfile->dorations()->create([
             'name'   => $request->name,
             'amount' => $request->amount,
             'payment_method' => $request->payment_method,
             'cat'    => $request->cat,
             'date'   => $request->date,
-            'notes'  => $request->notes ?? '',
+            'notes'  => $request->description ?? $request->notes ?? '',
+            'status' => $request->status ?? 'pending', // 👈 هذا هو السطر الناقص!
         ]);
+
         return response()->json([
             'message'  => 'تم إضافة التبرع بنجاح',
             'doration' => $doration,

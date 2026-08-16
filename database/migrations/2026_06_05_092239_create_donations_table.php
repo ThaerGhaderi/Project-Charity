@@ -15,7 +15,7 @@ return new class extends Migration
             $table->decimal('amount', 12, 2);
             $table->string('currency', 5)->default('USD');
             $table->enum('payment_method', ['stripe', 'paypal', 'tap', 'moyasar', 'mada', 'apple_pay', 'google_pay', 'crypto', 'payerurl']);
-            $table->enum('status', ['pending', 'completed', 'failed', 'refunded'])->default('pending');
+            $table->enum('status', ['pending', 'completed', 'failed', 'refunded','cancelled'])->default('pending');
             $table->boolean('is_anonymous')->default(false);
             $table->boolean('is_recurring')->default(false);
             $table->boolean('is_gift')->default(false);
