@@ -824,7 +824,7 @@ public function handleStripeWebhook(Request $request)
     }
     public function indexForAdmin()
     {
-        $dorations = Donation::with('donorProfile.user')->latest()->get();
+        $dorations = Donation::with('donor.user')->latest()->get();
         return response()->json($dorations);
     }
 
