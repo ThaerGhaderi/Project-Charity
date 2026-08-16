@@ -335,7 +335,7 @@ Route::prefix('admin/sponsorships')->group(function () {
     Route::get('', [SponsorshipManagementController::class, 'index']);
     Route::post('store', [SponsorshipManagementController::class, 'store']); // تم تغييرها إلى POST
     Route::get('dashboard', [SponsorshipManagementController::class, 'dashboard']);
-    
+
     // راوتات الحذف (مهم: delete-all يجب أن تسبق {id})
     Route::delete('delete-all', [SponsorshipManagementController::class, 'deleteAll']);
     Route::delete('{id}', [SponsorshipManagementController::class, 'destroy']);
@@ -363,3 +363,6 @@ Route::post('/stripe/webhook', [DonationController::class, 'handleStripeWebhook'
 /*Route::post('/payerurl/webhook', [DonationController::class, 'handlePayerurlWebhook'])
     ->name('payerurl.webhook')
     ->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class);*/
+
+    // ✅ حل سحري لـ FrankenPHP: توجيه طلبات الـ Rewrite الإجبارية إلى دالة التسجيل مباشرة
+Route::post('/index.php', [App\Http\Controllers\UserController::class, 'register']);
