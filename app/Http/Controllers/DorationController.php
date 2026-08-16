@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 use App\Exports\DonationExport;
 
 use App\Http\Requests\StoreDorationRequest;
+use App\Models\Donation;
 use App\Models\DonorProfile;
 use App\Models\Doration;
 use App\Models\User;
@@ -118,32 +119,41 @@ public function export()
 
 public function update(Request $request, $id)
 {
-    $doration = Doration::find($id);
+    // 1. نبحث في موديل Donation أولاً
+    $record = Donation::find($id);
+    
+    // 2. إذا لم نجده، نبحث في موديل Doration
+    if (!$record) {
+        $record = Doration::find($id);
+    }
 
-    if (!$doration) {
+    // 3. إذا لم نجده في كليهما، نرجع خطأ 404
+    if (!$record) {
         return response()->json([
             'status' => false,
-            'message' => 'التبرع غير موجود'
+            'message' => 'التبرع غير موجود في كلا الجدولين'
         ], 404);
     }
 
-    // نتأكد إن الحالة المرسلة موجودة ضمن الخيارات المسموح بها فقط
-    $request->validate([
-        'status' => 'sometimes|in:مكتمل,ملغي,قيد المراجعة',
+    // 4. نتأكد إن الحالة المرسلة موجودة ضمن الخيارات الإنجليزية المسموح بها
+    $validated = $request->validate([
+        'name' => 'sometimes|string',
+        'amount' => 'sometimes|numeric',
+        'payment_method' => 'sometimes|string',
+        'cat' => 'sometimes|string',
+        'date' => 'sometimes|date',
+        'description' => 'nullable|string',
+        'status' => 'sometimes|in:pending,completed,failed,refunded,cancelled',
     ]);
 
-    // نحدث الحالة فقط إذا تم إرسالها
-    if ($request->has('status')) {
-        $doration->status = $request->status;
-        $doration->save();
+    // 5. نحدث الحقول المرسلة (بما فيها الحالة الإنجليزية)
+    $record->update($validated);
 
-    }
-
-    // نرجع البيانات للرياكت
+    // 6. نرجع البيانات للرياكت
     return response()->json([
         'status' => true,
-        'message' => 'تم تحديث حالة التبرع بنجاح',
-        'data' => $doration
+        'message' => 'تم تحديث التبرع بنجاح',
+        'data' => $record
     ]);
 }
     /**
