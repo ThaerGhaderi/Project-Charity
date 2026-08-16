@@ -29,7 +29,7 @@ class OtpService
             'is_used' => false,
         ]);
 
-        // ✅ إرسال كود الـ OTP عبر طلب HTTP API لـ Brevo لتخطي حظر السيرفر السحابي
+        // ✅ التصحيح: إرسال لربط الـ API الصحيح لـ Brevo مع تثبيت إيميل المرسل الموثق لديك
         Http::withHeaders([
             'api-key' => env('BREVO_API_KEY'),
             'Content-Type' => 'application/json',
@@ -37,7 +37,7 @@ class OtpService
         ])->post('https://brevo.com', [
             'sender' => [
                 'name' => env('MAIL_FROM_NAME', 'Laravel Charity'),
-                'email' => env('MAIL_FROM_ADDRESS', 'mnmasri033@gmail.com')
+                'email' => 'mlkalglam@gmail.com' // تثبيت إيميل بريفو الموثق حتماً هنا لضمان الإرسال
             ],
             'to' => [
                 [
