@@ -24,7 +24,7 @@ class CampaignSeeder extends Seeder
                 'goal_amount' => 20000,
                 'category' => 'صحة',
                 'is_emergency' => false,
-                'status' => 'نشطة',
+                'status' => 'active',
             ],
             [
                 'title' => 'دعم تعليم الأيتام',
@@ -32,39 +32,31 @@ class CampaignSeeder extends Seeder
                 'goal_amount' => 15000,
                 'category' => 'تعليم',
                 'is_emergency' => false,
-                'status' => 'نشطة',
+                'status' => 'active',
             ],
             [
                 'title' => 'إغاثة متضرري الزلزال',
                 'description' => 'توفير مأوى وطعام ودواء للمتضررين من الزلزال في المناطق المنكوبة.',
                 'goal_amount' => 50000,
-                'category' => 'إطعام',
+                'category' => 'مساجد',
                 'is_emergency' => true,
-                'status' => 'نشطة',
+                'status' => 'active',
             ],
             [
                 'title' => 'إعادة بناء المنازل المدمرة',
                 'description' => 'إعادة بناء 20 منزلاً دمرت بالكامل في المناطق المتضررة.',
                 'goal_amount' => 30000,
-                'category' => 'مساجد',
+                'category' => 'صحة',
                 'is_emergency' => false,
-                'status' => 'نشطة',
+                'status' => 'active',
             ],
             [
-                'title' => 'توفير مياه الشرب النقية',
-                'description' => 'حفر آبار وتوفير مياه شرب نظيفة لـ 10 قرى محرومة.',
+                'title' => 'علاج مرضى الكلى',
+                'description' => 'تأمين جلسات غسيل كلوي لـ 30 مريضاً يعانون من الفشل الكلوي.',
                 'goal_amount' => 25000,
-                'category' => 'مياه',
+                'category' => 'صحة',
                 'is_emergency' => false,
-                'status' => 'نشطة',
-            ],
-            [
-                'title' => 'رعاية الأيتام',
-                'description' => 'تأمين احتياجات 100 يتيم من غذاء وكسوة وتعليم.',
-                'goal_amount' => 35000,
-                'category' => 'أيتام',
-                'is_emergency' => false,
-                'status' => 'نشطة',
+                'status' => 'active',
             ],
         ];
 
@@ -80,12 +72,12 @@ class CampaignSeeder extends Seeder
                 'is_emergency' => $campaignData['is_emergency'],
                 'status' => $campaignData['status'],
                 'short_url' => Str::random(8),
-                'qr_code_url' => 'qrcodes/' . Str::random(10) . '.png',
                 'start_date' => now()->subDays(random_int(1, 30)),
                 'end_date' => now()->addDays(random_int(30, 90)),
                 'created_by' => $admin->id,
             ]);
         }
+
         $this->command->info("✅ Campaigns created successfully!");
     }
 }
