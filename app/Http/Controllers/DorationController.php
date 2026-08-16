@@ -116,7 +116,6 @@ public function export()
         //
     }
 
-
 public function update(Request $request, $id)
 {
     // 1. نبحث في موديل Donation أولاً
@@ -146,10 +145,23 @@ public function update(Request $request, $id)
         'status' => 'sometimes|in:pending,completed,failed,refunded,cancelled',
     ]);
 
-    // 5. نحدث الحقول المرسلة (بما فيها الحالة الإنجليزية)
-    $record->update($validated);
+    // 5. الإسناد المباشر (يتجاهل fillable ويتجاهل الحقول غير الموجودة في الجدول)
+    if (isset($validated['name'])) $record->name = $validated['name'];
+    if (isset($validated['amount'])) $record->amount = $validated['amount'];
+    if (isset($validated['payment_method'])) $record->payment_method = $validated['payment_method'];
+    if (isset($validated['cat'])) $record->cat = $validated['cat'];
+    if (isset($validated['date'])) $record->date = $validated['date'];
+    if (isset($validated['description'])) $record->description = $validated['description'];
+    
+    // تحديث الحالة بشكل مباشر
+    if (isset($validated['status'])) {
+        $record->status = $validated['status'];
+    }
 
-    // 6. نرجع البيانات للرياكت
+    // 6. حفظ التغييرات
+    $record->save();
+
+    // 7. نرجع البيانات للرياكت
     return response()->json([
         'status' => true,
         'message' => 'تم تحديث التبرع بنجاح',
