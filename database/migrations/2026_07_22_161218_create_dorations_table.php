@@ -21,7 +21,7 @@ return new class extends Migration
                 $table->enum('payment_method', ['نقد', 'بطاقة مصرفية', 'محفظة موبايل', 'تحويل بنكي', 'حوالة']);
                 $table->enum('cat', ['إطعام', 'مساجد', 'تعليم', 'صحة', 'مياه', 'أيتام']);
                 $table->date('date');
-                $table->enum('status', ['مكتمل', 'ملغي', 'قيد المراجعة'])->default('قيد المراجعة');
+                $table->enum('status', ['مكتمل', 'ملغي', 'قيد المراجعة','pending', 'completed', 'failed', 'refunded'])->default('pending');
                 $table->string('notes')->nullable();
                 $table->timestamps();
             });

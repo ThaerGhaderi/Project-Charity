@@ -130,41 +130,25 @@ public function update(Request $request, $id)
     if (!$record) {
         return response()->json([
             'status' => false,
-            'message' => 'التبرع غير موجود في كلا الجدولين'
+            'message' => 'التبرع غير موجود'
         ], 404);
     }
 
     // 4. نتأكد إن الحالة المرسلة موجودة ضمن الخيارات الإنجليزية المسموح بها
     $validated = $request->validate([
-        'name' => 'sometimes|string',
-        'amount' => 'sometimes|numeric',
-        'payment_method' => 'sometimes|string',
-        'cat' => 'sometimes|string',
-        'date' => 'sometimes|date',
-        'description' => 'nullable|string',
         'status' => 'sometimes|in:pending,completed,failed,refunded,cancelled',
     ]);
 
-    // 5. الإسناد المباشر (يتجاهل fillable ويتجاهل الحقول غير الموجودة في الجدول)
-    if (isset($validated['name'])) $record->name = $validated['name'];
-    if (isset($validated['amount'])) $record->amount = $validated['amount'];
-    if (isset($validated['payment_method'])) $record->payment_method = $validated['payment_method'];
-    if (isset($validated['cat'])) $record->cat = $validated['cat'];
-    if (isset($validated['date'])) $record->date = $validated['date'];
-    if (isset($validated['description'])) $record->description = $validated['description'];
-    
-    // تحديث الحالة بشكل مباشر
+    // 5. نحدث الحالة فقط لا غير
     if (isset($validated['status'])) {
         $record->status = $validated['status'];
+        $record->save();
     }
 
-    // 6. حفظ التغييرات
-    $record->save();
-
-    // 7. نرجع البيانات للرياكت
+    // 6. نرجع البيانات للرياكت
     return response()->json([
         'status' => true,
-        'message' => 'تم تحديث التبرع بنجاح',
+        'message' => 'تم تحديث حالة التبرع بنجاح',
         'data' => $record
     ]);
 }
