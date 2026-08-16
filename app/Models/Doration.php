@@ -14,6 +14,7 @@ protected $fillable = [
         'date',
         'status',
         'notes',
+        'bio',
     ];
 
     public function donorProfile()
