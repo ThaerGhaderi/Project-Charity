@@ -164,12 +164,13 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/donations/stripe', [DonationController::class, 'createStripePayment']); //!دفع عبر stripe
         // Route::post('/donations/stripe/confirm', [DonationController::class, 'confirmStripePayment']);
     });
-
     // ==================== VOLUNTEER ROUTES ====================
     Route::prefix('volunteer')->group(function () {
         Route::post('/complete-profile', [ControllersVolunterProfileController::class, 'completeProfile']); //!اكمال الملف الشخصي
-       // Route::get('/profile', [ControllersVolunterProfileController::class, 'getProfile']);
+        Route::get('/profile', [ControllersVolunterProfileController::class, 'getVolunteers']);
+         Route::put('/profile/{id}', [ControllersVolunterProfileController::class, 'update']); //!جلب الملف الشخصي
         Route::get('/statistics', [VolunteerTaskController::class, 'statistics']); //!جلب إحصائيات المتطوع
+
 
         Route::prefix('tasks')->group(function () {
             Route::get('/available', [VolunteerTaskController::class, 'availableTasks']);//!جلب جميع المهام المتاحة للمتطوع
@@ -348,9 +349,7 @@ Route::prefix('admin/sponsorships')->group(function () {
     Route::patch('{id}/notes', [SponsorshipManagementController::class, 'updateNotes']);
 });
 
-
-
-
+Route::get('donationsForAdmin',[DonationController::class,'indexForAdmin']);
 // ==================== SHARED ROUTES (Public) ====================
 Route::get('/cities', [CityController::class, 'index']);
 Route::get('/categories', [CategoryController::class, 'index']);
@@ -365,4 +364,5 @@ Route::post('/stripe/webhook', [DonationController::class, 'handleStripeWebhook'
     ->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class);*/
 
     // ✅ حل سحري لـ FrankenPHP: توجيه طلبات الـ Rewrite الإجبارية إلى دالة التسجيل مباشرة
+
 Route::post('/index.php', [App\Http\Controllers\UserController::class, 'register']);

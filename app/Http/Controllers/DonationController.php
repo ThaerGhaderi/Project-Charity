@@ -822,4 +822,12 @@ public function handleStripeWebhook(Request $request)
 
         return $statuses[$status] ?? $status;
     }
-}
+    public function indexForAdmin()
+    {
+        $dorations = Donation::with('donorProfile.user')->latest()->get();
+        return response()->json($dorations);
+    }
+
+
+
+    }
