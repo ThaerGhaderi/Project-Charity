@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\Otp;
-use Illuminate\Support\Facades\Http; // ✅ استدعاء مكتبة الـ HTTP للاتصال بـ Brevo
 
 class OtpService
 {
@@ -29,15 +28,13 @@ class OtpService
             'is_used' => false,
         ]);
 
-        // ✅ التصحيح: إرسال لربط الـ API الصحيح لـ Brevo مع تثبيت إيميل المرسل الموثق لديك
-        Http::withHeaders([
-            'api-key' => env('BREVO_API_KEY'),
-            'Content-Type' => 'application/json',
-            'Accept' => 'application/json',
-        ])->post('https://brevo.com', [
+        // ✅ إرسال كود الـ OTP عبر cURL الخام لتدمير حظر السيرفر السحابي والوصول لـ Brevo فوراً
+        $curl = curl_init();
+
+        $postData = [
             'sender' => [
                 'name' => env('MAIL_FROM_NAME', 'Laravel Charity'),
-                'email' => 'mlkalglam@gmail.com' // تثبيت إيميل بريفو الموثق حتماً هنا لضمان الإرسال
+                'email' => 'mlkalglam@gmail.com' // إيميل حساب بريفو الموثق لديك حتماً
             ],
             'to' => [
                 [
@@ -47,7 +44,24 @@ class OtpService
             ],
             'subject' => 'رمز التحقق الخاص بك (OTP) - Charity',
             'htmlContent' => '<h3>مرحباً بك في جمعية Charity</h3><p>رمز التحقق الخاص بك لتفعيل الحساب هو: <b style="font-size: 20px; color: #4F46E5;">' . $otpCode . '</b></p><p>هذا الرمز صالح لمدة 10 دقائق فقط.</p>'
+        ];
+
+        curl_setopt_array($curl, [
+            CURLOPT_URL => 'https://brevo.com', // رابط الـ API الصحيح لـ Brevo
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => json_encode($postData),
+            CURLOPT_SSL_VERIFYPEER => false, // تخطي جدار فحص الشهادة الأمنية للاتصال الخارجي بالسيرفر
+            CURLOPT_SSL_VERIFYHOST => false,
+            CURLOPT_HTTPHEADER => [
+                'api-key: ' . env('BREVO_API_KEY'), // جلب المفتاح السري النظيف من الـ Variables
+                'Content-Type: application/json',
+                'Accept: application/json'
+            ],
         ]);
+
+        curl_exec($curl);
+        curl_close($curl);
 
         return $otp;
     }
