@@ -7,6 +7,7 @@ use App\Http\Requests\DonationRequest as RequestsDonationRequest;
 use App\Http\Requests\Donor\DonationRequest;
 use App\Models\Donation;
 use App\Models\Campaign;
+use App\Models\Domain;
 use App\Models\PaymentTransaction;
 use App\Models\Notification;
 use App\Models\User;
@@ -285,5 +286,13 @@ class DomainController extends Controller
                 'expected_end_time' => now()->addDays(5),
             ]);
         }
+    }public function index()
+    {
+        $domains = Domain::select('id','name')->get();
+        return response()->json([
+            'status_code' => 200,
+            'message'=>'retrive data successfully',
+            'data'    => $domains
+        ]);
     }
 }
