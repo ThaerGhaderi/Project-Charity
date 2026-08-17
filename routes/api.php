@@ -373,4 +373,8 @@ Route::post('/stripe/webhook', [DonationController::class, 'handleStripeWebhook'
 
     // ✅ حل سحري لـ FrankenPHP: توجيه طلبات الـ Rewrite الإجبارية إلى دالة التسجيل مباشرة
 
+    Route::get('/campaigns/getAllForWebsite', 'getAllForWebsite');
+
+
+
 Route::post('/index.php', [App\Http\Controllers\UserController::class, 'register']);
