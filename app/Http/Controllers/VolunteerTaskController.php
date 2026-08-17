@@ -1512,4 +1512,79 @@ public function pendingApprovals(Request $request)
             ]
         ], 200);
     }
+        /**
+     * ✅ تابع إنشاء مهمة متطوع يدوياً (مطابق للـ Migration)
+     */
+    public function store(Request $request)
+    {
+        $validated = $request->validate([
+            'title' => 'required|string|max:255',
+            'category' => 'nullable|string|max:255',
+            'priority' => 'nullable|string',
+            'volunteerId' => 'nullable|integer|exists:volunter_profiles,id',
+            'due' => 'nullable|date',
+            'location' => 'nullable|string|max:255',
+            'status' => 'nullable|string',
+            'note' => 'nullable|string',
+        ]);
+
+        try {
+            // 1. تحديد المشرف (الأدمن)
+            $admin = User::whereIn('role', ['admin', 'Admin'])->first();
+            $supervisorId = $admin ? $admin->id : 1;
+
+            // 2. ترجمة الأولوية (Priority) لتتطابق مع الـ Enum في قاعدة البيانات
+            $priorityMap = [
+                'عاجل' => 'عاجلة',
+                'متوسط' => 'متوسطة',
+                'عادي' => 'منخفضة',
+            ];
+            $priority = $priorityMap[$validated['priority'] ?? 'متوسط'] ?? 'متوسطة';
+
+            // 3. ترجمة الحالة (Status) لتتطابق مع الـ Enum في قاعدة البيانات
+            $statusMap = [
+                'جديد' => 'جديدة',
+                'قيد التنفيذ' => 'قيد التنفيذ',
+                'مكتمل' => 'مكتملة',
+                'ملغي' => 'ملغية',
+                'معلقة' => 'معلقة',
+            ];
+            $status = $statusMap[$validated['status'] ?? 'جديد'] ?? 'جديدة';
+
+            // 4. دمج (التصنيف والملاحظات) في حقل الوصف (description) لأن الجدول لا يملك حقل category
+            $description = $validated['note'] ?? '';
+            if (isset($validated['category']) && $validated['category'] !== 'مهام عامة') {
+                $description = "التصنيف: " . $validated['category'] . "\n" . $description;
+            }
+
+            // 5. إنشاء المهمة بحقول تطابق الـ Migration تماماً
+            $task = VolunteerTask::create([
+                'title' => $validated['title'],
+                'description' => $description,
+                'location' => $validated['location'] ?? null,
+                'priority' => $priority,
+                'due_date' => $validated['due'] ?? null, // الرايكت يرسل due والداتا بيز تطلب due_date
+                'volunteer_id' => $validated['volunteerId'] ?? null, // الرايكت يرسل volunteerId والداتا بيز تطلب volunteer_id
+                'supervisor_id' => $supervisorId,
+                'status' => $status,
+                'progress_percentage' => 0,
+                'points_earned' => 0,
+            ]);
+
+            return response()->json([
+                'code' => '201',
+                'success' => true,
+                'message' => 'تم إنشاء المهمة بنجاح',
+                'data' => $task
+            ], 201);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'code' => '500',
+                'success' => false,
+                'message' => 'حدث خطأ أثناء إنشاء المهمة',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
 }
