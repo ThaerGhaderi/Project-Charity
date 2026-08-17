@@ -1410,5 +1410,106 @@ public function pendingApprovals(Request $request)
             'data' => $tasks,
         ], 200);
     }
+    /**
+     * ✅ تابع جديد: جلب كل مهام المتطوعين في التطبيق (بدون شروط)
+     */
+    public function getAllTasks(Request $request)
+    {
+        $query = VolunteerTask::with(['supervisor', 'beneficiary', 'aidApplication', 'visit', 'campaign', 'checkIns']);
 
+        // تصفية حسب الحالة (اختياري للواجهة)
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        $tasks = $query->latest()->get();
+
+        $tasks->transform(function ($task) {
+            $task->status_text = $task->status_text;
+            $task->source_type = $task->source_type;
+            $task->source_name = $task->source_name;
+            $task->beneficiary_name = $task->beneficiary_name;
+
+            // إضافة معلومات إضافية إذا كانت المهمة مرتبطة بحملة أو طلب مساعدة
+            if ($task->campaign) {
+                $task->campaign_title = $task->campaign->title;
+            }
+            if ($task->aidApplication) {
+                $task->aid_type = $task->aidApplication->type;
+                $task->aid_is_urgent = $task->aidApplication->is_urgent;
+            }
+            if ($task->visit) {
+                $task->visit_date = $task->visit->formatted_date;
+            }
+
+            return $task;
+        });
+
+        return response()->json([
+            'code' => '200',
+            'success' => true,
+            'message' => 'تم جلب جميع المهام بنجاح',
+            'data' => $tasks
+        ], 200);
+    }
+
+    /**
+     * ✅ تابع جديد: جلب مهام متطوع محدد (عبر الـ ID)
+     */
+    public function getVolunteerTasks($volunteerId, Request $request)
+    {
+        $volunteer = VolunterProfile::find($volunteerId);
+
+        if (!$volunteer) {
+            return response()->json([
+                'code' => '404',
+                'success' => false,
+                'message' => 'المتطوع غير موجود',
+            ], 404);
+        }
+
+        $query = VolunteerTask::where('volunteer_id', $volunteerId)
+            ->with(['supervisor', 'beneficiary', 'aidApplication', 'visit', 'campaign', 'checkIns']);
+
+        // تصفية حسب الحالة (اختياري للواجهة)
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        $tasks = $query->latest()->get();
+
+        $tasks->transform(function ($task) {
+            $task->status_text = $task->status_text;
+            $task->source_type = $task->source_type;
+            $task->source_name = $task->source_name;
+            $task->beneficiary_name = $task->beneficiary_name;
+
+            if ($task->campaign) {
+                $task->campaign_title = $task->campaign->title;
+            }
+            if ($task->aidApplication) {
+                $task->aid_type = $task->aidApplication->type;
+                $task->aid_is_urgent = $task->aidApplication->is_urgent;
+            }
+            if ($task->visit) {
+                $task->visit_date = $task->visit->formatted_date;
+            }
+
+            return $task;
+        });
+
+        return response()->json([
+            'code' => '200',
+            'success' => true,
+            'message' => 'تم جلب مهام المتطوع بنجاح',
+            'data' => [
+                'volunteer' => [
+                    'id' => $volunteer->id,
+                    'name' => $volunteer->user->name ?? 'غير معروف',
+                    'total_hours' => $volunteer->total_hours,
+                ],
+                'tasks' => $tasks
+            ]
+        ], 200);
+    }
 }

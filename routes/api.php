@@ -306,6 +306,11 @@ Route::get('/admin/volunteer-tasks/pending-approvals', [VolunteerTaskController:
 Route::post('/{id}/start', [VolunteerTaskController::class, 'startTask']); //!بدء مهمة معينة
  Route::post('/{id}/end', [VolunteerTaskController::class, 'endTask']);
 
+     // المهام العامة
+    Route::get('/volunteer-tasks/all',[VolunteerTaskController::class, 'getAllTasks']); // 👈 جلب كل المهام
+
+    // مهام متطوع محدد
+    Route::get('/volunteers/{id}/tasks', [VolunteerTaskController::class,'getVolunteerTasks']); // 👈 جلب مهام متطوع بالـ ID
 
 Route::prefix('aid-applications')->group(function () {
     Route::get('/', [AidApplicationController::class, 'getAll']);
