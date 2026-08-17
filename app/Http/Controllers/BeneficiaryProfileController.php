@@ -312,7 +312,7 @@ class BeneficiaryProfileController extends Controller
     /**
      * ✅ من الملف الأول: إنشاء مستفيد جديد (Admin)
      */
-        public function store(Request $request)
+          public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
@@ -329,7 +329,7 @@ class BeneficiaryProfileController extends Controller
             'notes' => 'nullable|string',
             'city' => 'nullable|string|max:255',
             'phone' => 'nullable|string|max:20',
-            'need' => 'nullable|string|max:255', // نستقبل الفئة كنص من الواجهة
+            'need' => 'nullable|string|max:255',
             'priority' => 'nullable|string|in:عاجل,متوسط,عادي',
         ]);
 
@@ -359,7 +359,7 @@ class BeneficiaryProfileController extends Controller
                 $supportingPath = $request->file('photo_Supporting')->store('beneficiaries', 'public');
             }
 
-            // 1. إنشاء بيانات المستفيد الأساسية
+            // 1. إنشاء بيانات المستفيد الأساسية (تم إزالة 'need' من هنا)
             $beneficiary = $user->beneficiary()->create([
                 'family_members_count' => $request->filled('family_members_count') ? $request->family_members_count : 1,
                 'Breadwinner' => $request->boolean('Breadwinner'),
@@ -371,15 +371,12 @@ class BeneficiaryProfileController extends Controller
                 'is_Anonymous' => $request->boolean('is_Anonymous'),
                 'status' => 'قيد المراجعة',
                 'notes' => $request->filled('notes') ? $request->notes : null,
-                'need' => $request->filled('need') ? $request->need : 'غير محدد', // نخزنها كنسخة احتياطية في جدول المستفيدين أيضاً
                 'priority' => $request->filled('priority') ? $request->priority : 'عادي',
             ]);
 
             // 2. ربط فئة الاحتياج (Type) بالمستفيد عبر الجدول الوسيط
             if ($request->filled('need')) {
-                // نبحث عن الفئة بالاسم، وإذا لم نجدها ننشئها
                 $type = \App\Models\Type::firstOrCreate(['name' => $request->need]);
-                // نربطها بالمستفيد
                 $beneficiary->types()->attach($type->id);
             }
 
@@ -392,7 +389,7 @@ class BeneficiaryProfileController extends Controller
                 }
             }
 
-            // 4. إنشاء بيانات البروفايل (تخزين city_id وليس city)
+            // 4. إنشاء بيانات البروفايل
             $user->profile()->create([
                 'city_id' => $cityId,
                 'phone' => $request->filled('phone') ? $request->phone : null,
