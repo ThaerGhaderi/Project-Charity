@@ -33,6 +33,15 @@ class VolunteerTask extends Model
         'priority',
         'due_date',
         'type_id',
+
+
+        'awaiting_approval',
+        'requested_at',
+        'requested_latitude',
+        'requested_longitude',
+        'rejection_reason',
+        'reviewed_by',
+        'reviewed_at',
     ];
 
     protected $casts = [
@@ -41,6 +50,11 @@ class VolunteerTask extends Model
         'expected_end_time' => 'datetime',
         'completed_at' => 'datetime',
         'cancelled_at' => 'datetime',
+
+        'requested_at' => 'datetime',
+        'reviewed_at' => 'datetime',
+
+
         'progress_percentage' => 'integer',
         'points_earned' => 'integer',
     ];
@@ -64,6 +78,11 @@ class VolunteerTask extends Model
     public function supervisor()
     {
         return $this->belongsTo(User::class, 'supervisor_id');
+    }
+
+        public function reviewer()
+    {
+        return $this->belongsTo(User::class, 'reviewed_by');
     }
 
     public function checkIns()

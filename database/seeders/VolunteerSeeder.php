@@ -26,7 +26,7 @@ class VolunteerSeeder extends Seeder
 
         $this->command->info("👤 جاري إنشاء {$numberOfVolunteers} متطوع...");
 
-        $statuses = ['منشغل', 'متاح', 'غير متاح'];
+        $statuses = ['متاح'];
         $periods = ['صباحاً', 'ظهراً', 'مساءً'];
         $commitmentTypes = ['منتظم', 'مرة بمرة'];
         $educationLevels = ['ثانوية عامة', 'بكالوريوس', 'ماستر', 'دكتوراة', 'معهد'];
@@ -57,8 +57,6 @@ class VolunteerSeeder extends Seeder
                 'gender' => $gender,
                 'bio' => fake()->sentence(),
             ]);
-
-            // إنشاء ملف المتطوع
             VolunterProfile::create([
                 'user_id' => $user->id,
                 'Favorite_period' => fake()->randomElement($periods),
