@@ -23,11 +23,7 @@ class CampaignController extends Controller
      * دالة مساعدة لتنسيق بيانات الحملة (لتوحيد التواريخ)
      * ✅ من الملف الثاني
      */
-
-// ==========================================================
-    // دوال مساعدة للترجمة (عربي <-> إنجليزي)
-    // ==========================================================
-
+ // دوال الترجمة
     private function translateStatusToEnglish($status)
     {
         $map = [
@@ -35,7 +31,7 @@ class CampaignController extends Controller
             'مراجعة' => 'review',
             'نشطة' => 'active',
             'مغلقة' => 'closed',
-            'متوقفة' => 'closed', // تم دمجها مع مغلقة أو يمكنك إضافة paused للداتا بيز
+            'متوقفة' => 'closed',
             'مكتملة' => 'completed',
             'ملغية' => 'cancelled',
         ];
@@ -140,11 +136,13 @@ class CampaignController extends Controller
     /**
      * ✅ من الملف الثاني: Get all campaigns (بدون Pagination)
      */
-   public function getAll(Request $request)
+ 
+    // 1. عرض كل الحملات
+    public function getAll(Request $request)
     {
         $query = Campaign::query()
             ->withSum(['donations as achieved_amount' => function ($q) {
-                $q->where('status', 'completed'); // تصحيح للحالة الإنجليزية
+                $q->where('status', 'completed');
             }], 'amount')
             ->withCount(['donations as donors_count' => function ($q) {
                 $q->where('status', 'completed');
@@ -155,7 +153,7 @@ class CampaignController extends Controller
         }
 
         if ($request->has('status')) {
-            // 👈 نترجم الحالة العربية القادمة من الرياكت إلى إنجليزية للبحث في الداتا بيز
+            // نترجم فلتر الرياكت للإنجليزية للبحث في الداتا بيز
             $englishStatus = $this->translateStatusToEnglish($request->status);
             $query->where('status', $englishStatus);
         }
@@ -165,15 +163,15 @@ class CampaignController extends Controller
         }
 
         $campaigns = $query->latest()->get()->map(function ($campaign) {
+            // ننسق البيانات (الدالة لا تُلمس)
             $data = $this->formatCampaignData($campaign);
-            // 👈 نترجم الحالة الإنجليزية من الداتا بيز إلى عربية للواجهة
+            // 👈 نترجم الحالة للعربية بعد خروجها من دالة الفورمات
             $data['status'] = $this->translateStatusToArabic($campaign->status);
             return $data;
         });
 
         return response()->json($campaigns);
     }
-
 
     /**
      * ✅ من الملف الأول: Get featured campaigns (for homepage)
@@ -221,7 +219,8 @@ class CampaignController extends Controller
     /**
      * ✅ من الملف الثاني: Show campaign with formatted data
      */
-       public function showCampaign($id)
+      // 2. عرض حملة واحدة
+    public function showCampaign($id)
     {
         $campaign = Campaign::withSum(['donations as achieved_amount' => function ($q) {
                 $q->where('status', 'completed');
@@ -237,13 +236,13 @@ class CampaignController extends Controller
             ], 404);
         }
 
+        // ننسق البيانات (الدالة لا تُلمس)
         $data = $this->formatCampaignData($campaign);
-        // 👈 نترجم الحالة للعربية قبل الإرسال للواجهة
+        // 👈 نترجم الحالة للعربية بعد خروجها
         $data['status'] = $this->translateStatusToArabic($campaign->status);
 
         return response()->json($data);
     }
-
     /**
      * ✅ من الملف الأول: Get campaign updates
      */
@@ -360,33 +359,33 @@ class CampaignController extends Controller
     }*/
 
 
-  public function store(CampaignRequest $request): JsonResponse
+      // 3. إضافة حملة
+    public function store(CampaignRequest $request): JsonResponse
     {
          $data = $request->validated();
 
-         // 👈 نترجم الحالة العربية إلى إنجليزية قبل التخزين
+         // 👈 نترجم الحالة للإنجليزية قبل التخزين
          if (isset($data['status'])) {
              $data['status'] = $this->translateStatusToEnglish($data['status']);
          }
 
          $campaign = Campaign::create($data);
-
-         // 👈 ضفنا قيم افتراضية عشان الرياكت ما يخبط
+         
          $campaign->achieved_amount = 0;
          $campaign->donors_count = 0;
          $campaign->progress_percentage = 0;
 
          $responseData = $this->formatCampaignData($campaign);
-         // 👈 نترجم الحالة للعربية لإرسالها للواجهة بعد التخزين
+         // 👈 نترجم الحالة للعربية بعد خروجها
          $responseData['status'] = $this->translateStatusToArabic($campaign->status);
 
          return response()->json($responseData, 201);
     }
 
-
     /**
      * ✅ من الملف الثاني: Update campaign
      */
+   // 4. تعديل حملة
     public function update(Request $request, $id)
     {
         $campaign = Campaign::find($id);
@@ -406,10 +405,10 @@ class CampaignController extends Controller
             'start_date' => 'nullable|date|after_or_equal:today',
             'end_date' => 'nullable|date|after:start_date',
             'location' => 'nullable|string|max:255',
-            'status' => 'sometimes|string', // 👈 نجعلها string لكي تقبل العربية ونعالجها يدوياً
+            'status' => 'sometimes|string',
         ]);
 
-        // 👈 نترجم الحالة العربية إلى إنجليزية قبل التحديث في الداتا بيز
+        // 👈 نترجم الحالة للإنجليزية قبل التحديث
         if (isset($validated['status'])) {
             $validated['status'] = $this->translateStatusToEnglish($validated['status']);
         }
@@ -418,12 +417,11 @@ class CampaignController extends Controller
         $freshCampaign = $campaign->fresh();
 
         $data = $this->formatCampaignData($freshCampaign);
-        // 👈 نترجم الحالة للعربية لإرسالها للواجهة بعد التحديث
+        // 👈 نترجم الحالة للعربية بعد خروجها
         $data['status'] = $this->translateStatusToArabic($freshCampaign->status);
 
         return response()->json($data);
     }
-
     /**
      * ✅ من الملف الأول: Update campaign status
      */ public function updateStatus(Request $request, $id)
