@@ -86,13 +86,13 @@ class BeneficiaryProfileController extends Controller
                 'photo_Supporting'      => $photoSupportingPath,
             ]);
             $beneficiaryProfile->types()->sync($validated['types']);
-            
+
             // ✅ من الملف الثاني: تحديث profile_completed
             $user->update([
                 'profile_completed' => true,
                 'is_active' => true,
             ]);
-            
+
             return ['profile' => $profile, 'beneficiary' => $beneficiaryProfile];
         });
         return response()->json([
@@ -118,7 +118,7 @@ class BeneficiaryProfileController extends Controller
             ], 500);
         }
     }
-    
+
     public function getProfile(Request $request)
     {
         $user = $request->user();
@@ -131,7 +131,7 @@ class BeneficiaryProfileController extends Controller
             ], 404);
         }
         $profileData = $user->beneficiary->toArray();
-        
+
         // ✅ من الملف الثاني: استخدام beneficiary->is_anonymized
         if ($user->beneficiary->is_anonymized) {
             unset($profileData['address']);
@@ -153,7 +153,7 @@ class BeneficiaryProfileController extends Controller
             ]
         ]);
     }
-    
+
     /**
      * ✅ من الملف الثاني: تحديث الملف الشخصي
      */
@@ -192,7 +192,7 @@ class BeneficiaryProfileController extends Controller
                 'income_range' => true,
                 'is_Anonymous' => true,
             ]);
-            
+
             if (!empty($beneficiaryData)) {
                 $user->beneficiary->update($beneficiaryData);
             }
@@ -234,7 +234,7 @@ class BeneficiaryProfileController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            
+
             return response()->json([
                 'code' => '500',
                 'success' => false,
@@ -247,9 +247,10 @@ class BeneficiaryProfileController extends Controller
     /**
      * ✅ من الملف الأول: قائمة المستفيدين
      */
-    public function index(Request $request)
+       public function index(Request $request)
     {
-        $query = User::where('role', 'Beneficiary')->with('beneficiary');
+        // أضفنا 'profile.city' لجلب اسم المحافظة من جدول المدن
+        $query = User::where('role', 'Beneficiary')->with(['beneficiary', 'profile.city']);
 
         if ($request->has('status')) {
             $query->whereHas('beneficiary', function ($q) use ($request) {
@@ -267,7 +268,9 @@ class BeneficiaryProfileController extends Controller
                     'status' => $user->beneficiary ? $user->beneficiary->status : null,
                     'members' => $user->beneficiary ? $user->beneficiary->family_members_count : 0,
                     'need' => $user->beneficiary ? $user->beneficiary->need : 'غير محدد',
-                    'city' => $user->beneficiary ? $user->beneficiary->city : 'غير محدد',
+                    // 👈 جلب اسم المحافظة من العلاقة المتداخلة
+                    'city' => $user->profile && $user->profile->city ? $user->profile->city->name : 'غير محدد',
+                    'phone' => $user->profile ? $user->profile->phone : 'غير متوفر',
                     'income' => $user->beneficiary ? $user->beneficiary->income_range : 'أقل من 100 الف',
                     'marital_status' => $user->beneficiary ? $user->beneficiary->marital_status : 'غير محدد',
                     'priority' => $user->beneficiary ? $user->beneficiary->priority : 'عادي',
@@ -280,14 +283,14 @@ class BeneficiaryProfileController extends Controller
             'data' => $beneficiaries,
         ]);
     }
-    
     /**
      * ✅ من الملف الأول: عرض مستفيد محدد
      */
-    public function show($id)
+        public function show($id)
     {
+        // أضفنا 'profile.city' لجلب اسم المحافظة
         $user = User::where('role', 'Beneficiary')
-            ->with(['beneficiary.types'])
+            ->with(['beneficiary.types', 'profile.city'])
             ->find($id);
 
         if (!$user) {
@@ -302,11 +305,10 @@ class BeneficiaryProfileController extends Controller
             'data' => $user,
         ]);
     }
-    
     /**
      * ✅ من الملف الأول: إنشاء مستفيد جديد (Admin)
      */
-    public function store(Request $request)
+       public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
@@ -321,7 +323,7 @@ class BeneficiaryProfileController extends Controller
             'marital_status' => 'required|in:أعزب,متزوج,مطلق,أرمل,يتيم',
             'is_Anonymous' => 'boolean',
             'notes' => 'nullable|string',
-            'city' => 'nullable|string|max:255',
+            'city' => 'nullable|string|max:255', // نستقبلها كنص من الواجهة
             'phone' => 'nullable|string|max:20',
             'need' => 'nullable|string|max:255',
             'priority' => 'nullable|string|in:عاجل,متوسط,عادي',
@@ -353,6 +355,7 @@ class BeneficiaryProfileController extends Controller
                 $supportingPath = $request->file('photo_Supporting')->store('beneficiaries', 'public');
             }
 
+            // 1. إنشاء بيانات المستفيد
             $user->beneficiary()->create([
                 'family_members_count' => $request->filled('family_members_count') ? $request->family_members_count : 1,
                 'Breadwinner' => $request->boolean('Breadwinner'),
@@ -364,11 +367,25 @@ class BeneficiaryProfileController extends Controller
                 'is_Anonymous' => $request->boolean('is_Anonymous'),
                 'status' => 'قيد المراجعة',
                 'notes' => $request->filled('notes') ? $request->notes : null,
-                'city' => $request->filled('city') ? $request->city : null,
-                'phone' => $request->filled('phone') ? $request->phone : null,
                 'need' => $request->filled('need') ? $request->need : 'مسكن',
                 'priority' => $request->filled('priority') ? $request->priority : 'عادي',
             ]);
+
+            // 2. البحث عن المدينة بالاسم لجلب الـ ID
+            $cityId = null;
+            if ($request->filled('city')) {
+                $city = \App\Models\City::where('name', $request->city)->first();
+                if ($city) {
+                    $cityId = $city->id;
+                }
+            }
+
+            // 3. إنشاء بيانات البروفايل (تخزين city_id وليس city)
+            $user->profile()->create([
+                'city_id' => $cityId,
+                'phone' => $request->filled('phone') ? $request->phone : null,
+            ]);
+
             return $user;
         });
 
@@ -383,19 +400,20 @@ class BeneficiaryProfileController extends Controller
                 'status' => 'قيد المراجعة',
                 'members' => $user->beneficiary->family_members_count,
                 'need' => $user->beneficiary->need,
-                'city' => $user->beneficiary->city,
+                'city' => $request->city, // نرجع الاسم كما أرسله المستخدم
+                'phone' => $request->phone,
                 'income' => $user->beneficiary->income_range,
                 'date' => $user->created_at->format('Y-m-d'),
             ],
         ], 201);
     }
-    
     /**
      * ✅ من الملف الأول: تحديث حالة المستفيد
      */
-    public function updateStatus(Request $request, $id)
+       public function updateStatus(Request $request, $id)
     {
-        $user = User::where('role', 'Beneficiary')->with('beneficiary')->find($id);
+        // أضفنا 'profile.city' لجلب الاسم في الرد
+        $user = User::where('role', 'Beneficiary')->with(['beneficiary', 'profile.city'])->find($id);
 
         if (!$user || !$user->beneficiary) {
             return response()->json([
@@ -428,13 +446,14 @@ class BeneficiaryProfileController extends Controller
                 'status' => $user->beneficiary->status,
                 'members' => $user->beneficiary->family_members_count,
                 'need' => $user->beneficiary->need,
-                'city' => $user->beneficiary->city,
+                // 👈 جلب اسم المحافظة من العلاقة المتداخلة
+                'city' => $user->profile && $user->profile->city ? $user->profile->city->name : null,
+                'phone' => $user->profile ? $user->profile->phone : null,
                 'income' => $user->beneficiary->income_range,
                 'date' => $user->created_at->format('Y-m-d'),
             ],
         ]);
     }
-    
     /**
      * ✅ من الملف الأول: حذف مستفيد
      */
