@@ -579,8 +579,8 @@ class VisitController extends Controller
             $message['body'],
             'visit',
             [
-                'visit_id' => $visit->id,
-                'type' => $type,
+                'visit_id' => (string) $visit->id, // ✅ تحويل إلى string
+                'type' => (string)$type,
             ]
         );
     }
@@ -730,17 +730,17 @@ class VisitController extends Controller
     {
         // نستخدم ?? 1 لتجنب خطأ null إذا لم يكن مسجلاً للدخول
         $admin = $request->user();
-        $createdById = $admin ? $admin->id : 1; 
+        $createdById = $admin ? $admin->id : 1;
 
         try {
             // نبحث عن مستفيد بالاسم المرسل من الواجهة
             $beneficiary = \App\Models\User::where('name', $request->name)->first();
-            $beneficiaryId = $beneficiary ? $beneficiary->id : 1; 
+            $beneficiaryId = $beneficiary ? $beneficiary->id : 1;
 
             $visit = Visit::create([
                 'beneficiary_id' => $beneficiaryId,
                 'visit_type'     => $request->need ?? 'زيارة عامة',
-                'location'       => $request->city ?? 'غير محدد',     
+                'location'       => $request->city ?? 'غير محدد',
                 'visit_date'     => $request->date,
                  'visit_time'     => now(), // 👈 أضفنا هذا السطر لتجنب الخطأ
                 'status'         => $request->status ?? 'قيد الانتظار',
