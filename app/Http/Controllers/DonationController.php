@@ -34,82 +34,90 @@ class DonationController extends Controller
      * Create a new donation (Local Payment)
      * POST /api/donor/donations
      */
-    public function store(RequestsDonationRequest $request)
-    {
-        $user = $request->user();
-        $donor = $user->donor;
+   public function store(RequestsDonationRequest $request)
+{
+    $user = $request->user();
+    $donor = $user->donor;
 
-        if (!$donor) {
-            return response()->json([
-                'success' => false,
-                'message' => 'لم يتم العثور على ملف المتبرع'
-            ], 404);
-        }
-
-        $campaign = Campaign::findOrFail($request->campaign_id);
-
-        if ($campaign->status !== 'active') {
-            return response()->json([
-                'success' => false,
-                'message' => 'هذه الحملة غير نشطة حالياً'
-            ], 400);
-        }
-
-        try {
-            DB::beginTransaction();
-
-            $donation = Donation::create([
-                'donor_id' => $donor->id,
-                'campaign_id' => $campaign->id,
-                'amount' => $request->amount,
-                'currency' => $request->currency ?? 'USD',
-                'payment_method' => $request->payment_method,
-                'payment_gateway' => 'local',
-                'status' => 'pending',
-                'is_anonymous' => $request->is_anonymous ?? false,
-                'is_recurring' => $request->is_recurring ?? false,
-                'is_gift' => false,
-                'on_behalf_of' => $request->on_behalf_of,
-                'gift_message' => $request->gift_message,
-                'donated_at' => now()
-            ]);
-
-            $transaction = PaymentTransaction::create([
-                'donation_id' => $donation->id,
-                'gateway_ref' => 'TXN_' . Str::random(16),
-                'amount' => $request->amount,
-                'currency' => $request->currency ?? 'USD',
-                'status' => 'pending'
-            ]);
-
-            DB::commit();
-
-            $this->processPayment($donation, $transaction);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'تم إنشاء التبرع بنجاح',
-                'data' => [
-                    'donation' => $donation,
-                    'payment_intent' => [
-                        'client_secret' => 'sim_' . Str::random(32),
-                        'amount' => $donation->amount,
-                        'currency' => $donation->currency
-                    ]
-                ]
-            ], 201);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-
-            return response()->json([
-                'success' => false,
-                'message' => 'حدث خطأ أثناء إنشاء التبرع',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+    if (!$donor) {
+        return response()->json([
+            'success' => false,
+            'message' => 'لم يتم العثور على ملف المتبرع'
+        ], 404);
     }
 
+    $campaign = Campaign::find($request->campaign_id);
+
+    if (!$campaign) {
+        return response()->json([
+            'success' => false,
+            'message' => 'الحملة غير موجودة'
+        ], 404);
+    }
+
+    if ($campaign->status !== 'active') {
+        return response()->json([
+            'success' => false,
+            'message' => 'هذه الحملة غير نشطة حالياً'
+        ], 400);
+    }
+
+    try {
+        DB::beginTransaction();
+
+        $donation = Donation::create([
+            'donor_id'        => $donor->id,
+            'campaign_id'     => $campaign->id,
+            'amount'          => $request->amount,
+            'currency'        => $request->currency ?? 'USD',
+            'payment_method'  => $request->payment_method,
+            'payment_gateway' => 'local',
+            'status'          => 'pending',
+            'is_anonymous'   => $request->is_anonymous ?? false,
+            'is_recurring'   => $request->is_recurring ?? false,
+            'is_gift'        => false,
+            'on_behalf_of'    => $request->on_behalf_of,
+            'gift_message'    => $request->gift_message,
+            'donated_at'      => now()
+        ]);
+
+        $transaction = PaymentTransaction::create([
+            'donation_id' => $donation->id,
+            'gateway_ref' => 'TXN_' . Str::random(16),
+            'amount'      => $request->amount,
+            'currency'    => $request->currency ?? 'USD',
+            'status'      => 'pending'
+        ]);
+
+        // ✅ معالجة الدفع داخل الترانزاكشن أو جلب البيانات الحقيقية منها
+        $paymentResult = $this->processPayment($donation, $transaction);
+
+        DB::commit();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'تم إنشاء التبرع بنجاح',
+            'data'    => [
+                'donation'       => $donation,
+                'payment_intent' => [
+                    // إرجاع client_secret الحقيقي القادم من معالجة الدفع إن وجد
+                    'client_secret' => $paymentResult['client_secret'] ?? ('sim_' . Str::random(32)),
+                    'amount'        => $donation->amount,
+                    'currency'      => $donation->currency
+                ]
+            ]
+        ], 201);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+
+        return response()->json([
+            'success' => false,
+            'message' => 'حدث خطأ أثناء إنشاء التبرع',
+            'error'   => $e->getMessage()
+        ], 500);
+    }
+}
     /**
      * Process payment (webhook handler)
      */
