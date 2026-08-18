@@ -1587,4 +1587,59 @@ public function pendingApprovals(Request $request)
             ], 500);
         }
     }
+
+    /**
+     * ✅ تابع جديد: إتمام مهمة متطوع يدوياً من لوحة التحكم
+     */
+    public function completeTask($id, Request $request)
+    {
+        $task = VolunteerTask::find($id);
+
+        if (!$task) {
+            return response()->json([
+                'code' => '404',
+                'success' => false,
+                'message' => 'المهمة غير موجودة'
+            ], 404);
+        }
+
+        try {
+            // تحديث حالة المهمة إلى مكتملة
+            $task->update([
+                'status' => 'مكتملة',
+                'completed_at' => now(),
+                'progress_percentage' => 100,
+                'awaiting_approval' => null, // إلغاء أي طلبات معلقة
+            ]);
+
+            // إذا كانت المهمة مرتبطة بطلب مساعدة، نحدث حالته أيضاً
+            if ($task->aidApplication) {
+                $task->aidApplication->update([
+                    'status' => 'completed',
+                    'completed_at' => now(),
+                ]);
+            }
+
+            // إذا كانت المهمة مرتبطة بزيارة، نحدث حالتها
+            if ($task->visit) {
+                $task->visit->update(['status' => 'مكتملة']);
+            }
+
+            return response()->json([
+                'code' => '200',
+                'success' => true,
+                'message' => 'تم إتمام المهمة بنجاح',
+                'data' => $task->fresh()
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'code' => '500',
+                'success' => false,
+                'message' => 'حدث خطأ أثناء إتمام المهمة',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
 }

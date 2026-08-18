@@ -305,7 +305,7 @@ Route::post('/admin/volunteer-tasks/{id}/review-end', [VolunteerTaskController::
 Route::get('/admin/volunteer-tasks/pending-approvals', [VolunteerTaskController::class, 'pendingApprovals']);
 Route::post('/{id}/start', [VolunteerTaskController::class, 'startTask']); //!بدء مهمة معينة
  Route::post('/{id}/end', [VolunteerTaskController::class, 'endTask']);
-
+Route::post('/volunteer-tasks/{id}/complete', [VolunteerTaskController::class, 'completeTask']);
      // المهام العامة
     Route::get('/volunteer-tasks/all',[VolunteerTaskController::class, 'getAllTasks']); // 👈 جلب كل المهام
 

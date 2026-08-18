@@ -19,6 +19,11 @@ class TypeSeeder extends Seeder
         'تعليم أبناء',
         'دعم مالي',
         'إطعام',
+        'مسكن',
+        'غذاء',
+        'تعليم',
+        'مياه',
+        'دعم مالي',
     ];
     foreach ($types as $type) {
         Type::create(['name' => $type]);
