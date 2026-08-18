@@ -34,7 +34,6 @@ class ChatController extends Controller
             'data' => $conversations
         ], 200);
     }
-
     /**
      * إنشاء محادثة جديدة
      */
@@ -45,7 +44,7 @@ class ChatController extends Controller
         $validated = $request->validate([
             'type' => 'required|in:private,group,public',
             'name' => 'required_if:type,group|nullable|string|max:255',
-            'participants' => 'required|array|min:1',
+            'participants' => 'required_if:type,group,private|array',
             'participants.*' => 'exists:users,id',
         ]);
 
@@ -60,8 +59,8 @@ class ChatController extends Controller
             ]);
 
             // إضافة المشاركين
-            $participants = array_merge([$user->id], $validated['participants']);
-            
+           $participants = array_unique(array_merge([$user->id], $validated['participants']));
+
             foreach ($participants as $participantId) {
                 ChatParticipant::create([
                     'conversation_id' => $conversation->id,
@@ -90,8 +89,6 @@ class ChatController extends Controller
             ], 500);
         }
     }
-
-  
 public function messages($conversationId, Request $request)
 {
     $user = $request->user();
@@ -198,7 +195,7 @@ public function messages($conversationId, Request $request)
     public function typing(Request $request, $conversationId)
     {
         $user = $request->user();
-        
+
         $isTyping = $request->boolean('is_typing', true);
 
         broadcast(new UserTyping(

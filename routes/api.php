@@ -171,15 +171,15 @@ Route::middleware('auth:sanctum')->group(function () {
          Route::put('/profile/{id}', [ControllersVolunterProfileController::class, 'update']); //!جلب الملف الشخصي
         Route::get('/statistics', [VolunteerTaskController::class, 'statistics']); //!جلب إحصائيات المتطوع
 
-
-        Route::prefix('tasks')->group(function () {
+Route::prefix('tasks')->group(function () {
             Route::get('/available', [VolunteerTaskController::class, 'availableTasks']);//!جلب جميع المهام المتاحة للمتطوع
             Route::get('/', [VolunteerTaskController::class, 'index']); //!جلب جميع المهام مع تصفية حسب الطلب
             Route::get('/current', [VolunteerTaskController::class, 'currentTask']); //!جلب المهمة الحالية للمتطوع
+            Route::get('/pending-requests', [VolunteerTaskController::class, 'pendingRequests']);//!جلب جميع الطلبات المعلقة للمتطوع
             Route::get('/{id}', [VolunteerTaskController::class, 'show']);         //!جلب تفاصيل مهمة معينة
-              Route::post('/{id}/request-start', [VolunteerTaskController::class, 'requestStartTask']); //!بدء مهمة معينة
-              Route::post('/{id}/request-end', [VolunteerTaskController::class, 'requestEndTask']); //!إنهاء مهمة معينة
-             Route::get('/pending-requests', [VolunteerTaskController::class, 'pendingRequests']);//!جلب جميع الطلبات المعلقة للمتطوع
+            Route::post('/{id}/request-start', [VolunteerTaskController::class, 'requestStartTask']); //!بدء مهمة معينة
+            Route::post('/{id}/request-end', [VolunteerTaskController::class, 'requestEndTask']); //!إنهاء مهمة معينة
+
         });
         // ✅ التقييمات (جديد)
         Route::get('/evaluations', [VolunteerTaskController::class, 'evaluations']); //!جلب جميع التقييمات للمتطوع
