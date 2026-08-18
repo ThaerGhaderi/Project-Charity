@@ -34,7 +34,7 @@ class DonationController extends Controller
      * Create a new donation (Local Payment)
      * POST /api/donor/donations
      */
-   public function store(RequestsDonationRequest $request)
+  public function store(RequestsDonationRequest $request)
 {
     $user = $request->user();
     $donor = $user->donor;
