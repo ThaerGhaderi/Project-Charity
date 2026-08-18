@@ -93,45 +93,71 @@ class Notification extends Model
     }
 
 
-    public function sendPushNotification()
-    {
-        $user = $this->user;
+ public function sendPushNotification()
+{
+    $user = $this->user;
 
-        if (!$user || !$user->hasFcmToken()) {
-            return false;
-        }
-
-        try {
-            $messaging = app(\Kreait\Firebase\Messaging::class);
-
-            $message = CloudMessage::withTarget('token', $user->fcm_token)
-                ->withNotification(FirebaseNotification::create(
-                    $this->title,
-                    $this->body
-                ))
-                ->withData([
-                    'notification_id' => (string) $this->id,
-                    'type' => $this->type,
-                    'click_action' => $this->getClickAction(),
-                    ...($this->data ?? [])
-                ]);
-
-            $messaging->send($message);
-
-            Log::info("Firebase push sent to user {$user->id}", [
-                'notification_id' => $this->id
-            ]);
-
-            return true;
-
-        } catch (\Exception $e) {
-            Log::error('Firebase push failed: ' . $e->getMessage(), [
-                'notification_id' => $this->id,
-                'user_id' => $user->id
-            ]);
-            return false;
-        }
+    if (!$user || !$user->hasFcmToken()) {
+        return false;
     }
+
+    try {
+        $messaging = app(\Kreait\Firebase\Messaging::class);
+
+        $message = CloudMessage::withTarget('token', $user->fcm_token)
+            ->withNotification(FirebaseNotification::create(
+                $this->title,
+                $this->body
+            ))
+            ->withAndroidConfig(
+                \Kreait\Firebase\Messaging\AndroidConfig::fromArray([
+                    'priority' => 'high',
+                    'notification' => [
+                        'channel_id' => 'high_importance_channel',
+                        'sound' => 'default',
+                        'priority' => 'high',
+                        'default_vibrate_timings' => true,
+                        'default_light_settings' => true,
+                    ],
+                ])
+            )
+            ->withApnsConfig(
+                \Kreait\Firebase\Messaging\ApnsConfig::fromArray([
+                    'payload' => [
+                        'aps' => [
+                            'sound' => 'default',
+                            'badge' => 1,
+                            'content-available' => true,
+                        ],
+                    ],
+                    'headers' => [
+                        'apns-priority' => '10',
+                    ],
+                ])
+            )
+            ->withData([
+                'notification_id' => (string) $this->id,
+                'type' => $this->type,
+                'click_action' => $this->getClickAction(),
+                ...($this->data ?? [])
+            ]);
+
+        $messaging->send($message);
+
+        Log::info("Firebase push sent to user {$user->id}", [
+            'notification_id' => $this->id
+        ]);
+
+        return true;
+
+    } catch (\Exception $e) {
+        Log::error('Firebase push failed: ' . $e->getMessage(), [
+            'notification_id' => $this->id,
+            'user_id' => $user->id
+        ]);
+        return false;
+    }
+}
 
     // ================================================================
     // ✅ دالة sendPushOnly (نفس السلوك الجديد: تخزين + Firebase)

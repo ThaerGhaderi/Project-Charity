@@ -2,79 +2,129 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
-use App\Http\Requests\Donor\GiftDonationRequest;
-use App\Http\Requests\GiftDonationRequest as RequestsGiftDonationRequest;
-use App\Models\GiftDonation;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use App\Models\Campaign;
 use App\Models\Donation;
-use Illuminate\Http\Request;
+use App\Models\PaymentTransaction;
+use App\Models\GiftDonation;
+use App\Http\Requests\GiftDonationRequest;
 
 class GiftDonationController extends Controller
 {
-    /**
-     * Create a gift donation
-     */
-    public function store(RequestsGiftDonationRequest $request)
-    {
-        $user = $request->user();
-         $donor = $user->donor;
-        $donation = Donation::where('donor_id', $donor->id)
-            ->where('id', $request->donation_id)
-            ->where('status', 'completed')
-            ->firstOrFail();
 
-        // Check if already a gift donation
-        $existing = GiftDonation::where('donation_id', $donation->id)->first();
-        if ($existing) {
-            return response()->json([
-                'success' => false,
-                'message' => 'هذا التبرع تم تحويله إلى هدية بالفعل'
-            ], 400);
-        }
+public function store(GiftDonationRequest $request)
+{
+    $user = $request->user();
+    $donor = $user->donor;
 
-        // Create gift donation
-        $gift = GiftDonation::create([
-            'donation_id' => $donation->id,
-            'recipient_name' => $request->recipient_name,
-            'recipient_email' => $request->recipient_email,
-            'message' => $request->message
+    if (!$donor) {
+        return response()->json([
+            'success' => false,
+            'message' => 'لم يتم العثور على ملف المتبرع'
+        ], 404);
+    }
+
+    $campaign = Campaign::find($request->campaign_id);
+
+    if (!$campaign) {
+        return response()->json([
+            'success' => false,
+            'message' => 'الحملة غير موجودة'
+        ], 404);
+    }
+
+    if ($campaign->status !== 'active') {
+        return response()->json([
+            'success' => false,
+            'message' => 'هذه الحملة غير نشطة حالياً'
+        ], 400);
+    }
+
+    try {
+        DB::beginTransaction();
+
+        // 1. إنشاء سجل التبرع الجديد مع تعليمه كـ "هدية"
+        $donation = Donation::create([
+            'donor_id'        => $donor->id,
+            'campaign_id'     => $campaign->id,
+            'amount'          => $request->amount,
+            'currency'        => $request->currency ?? 'USD',
+            'payment_method'  => $request->payment_method,
+            'payment_gateway' => 'local',
+            'status'          => 'pending',
+            'is_anonymous'    => $request->is_anonymous ?? false,
+            'is_recurring'    => false,
+            'is_gift'         => true,
+            'gift_message'    => $request->message,
+            'donated_at'      => now()
         ]);
 
-        // Generate certificate
-        $certificateUrl = $gift->generateCertificate();
-        
-        // Send email to recipient
-        // Mail::to($gift->recipient_email)->send(new GiftCertificateMail($gift));
+        // 2. إنشاء المعاملة المالية
+        $transaction = PaymentTransaction::create([
+            'donation_id' => $donation->id,
+            'gateway_ref' => 'TXN_' . Str::random(16),
+            'amount'      => $request->amount,
+            'currency'    => $request->currency ?? 'USD',
+            'status'      => 'pending'
+        ]);
 
-        // Update donation to mark as gift
-        $donation->update(['is_gift' => true]);
+        // 3. إنشاء سجل الإهداء المرتبط بالتبرع
+        $gift = GiftDonation::create([
+            'donation_id'     => $donation->id,
+            'recipient_name'  => $request->recipient_name,
+            'recipient_email' => $request->recipient_email,
+            'message'         => $request->message
+        ]);
+
+        // 4. معالجة بوابة الدفع
+        $paymentResult = $this->processPayment($donation, $transaction);
+
+        // 5. توليد شهادة الإهداء
+        $certificateUrl = method_exists($gift, 'generateCertificate') ? $gift->generateCertificate() : null;
+
+        DB::commit();
 
         return response()->json([
             'success' => true,
-            'message' => 'تم تحويل التبرع إلى هدية بنجاح',
-            'data' => [
-                'gift' => $gift,
+            'message' => 'تم إنشاء تبرع الإهداء بنجاح',
+            'data'    => [
+                'donation'        => $donation,
+                'gift'            => $gift,
                 'certificate_url' => $certificateUrl ? asset('storage/' . $certificateUrl) : null,
-                'recipient_notified' => true
+                'payment_intent'  => [
+                    'client_secret' => $paymentResult['client_secret'] ?? ('sim_' . Str::random(32)),
+                    'amount'        => $donation->amount,
+                    'currency'      => $donation->currency
+                ]
             ]
         ], 201);
-    }
 
+    } catch (\Exception $e) {
+        DB::rollBack();
+
+        return response()->json([
+            'success' => false,
+            'message' => 'حدث خطأ أثناء إنشاء تبرع الإهداء',
+            'error'   => $e->getMessage()
+        ], 500);
+    }
+}
     /**
      * Get gift donations for user
      */
-     public function index(Request $request)
+     public function index(GiftDonationRequest $request)
     {
         $user = $request->user();
         $donor = $user->donor;  // ✅ جلب ملف المتبرع
-        
+
         if (!$donor) {
             return response()->json([
                 'success' => false,
                 'message' => 'لم يتم العثور على ملف المتبرع'
             ], 404);
         }
-        
+
         $gifts = GiftDonation::with(['donation.campaign'])
             ->whereHas('donation', function($q) use ($donor) {
                 $q->where('donor_id', $donor->id);  // ✅ استخدام donor_id
@@ -89,18 +139,18 @@ class GiftDonationController extends Controller
     /**
      * Get gift details
      */
-    public function show($id, Request $request)
+    public function show($id, GiftDonationRequest $request)
     {
         $user = $request->user();
         $donor = $user->donor;  // ✅ جلب ملف المتبرع
-        
+
         if (!$donor) {
             return response()->json([
                 'success' => false,
                 'message' => 'لم يتم العثور على ملف المتبرع'
             ], 404);
         }
-        
+
         $gift = GiftDonation::with(['donation.campaign'])
             ->whereHas('donation', function($q) use ($donor) {
                 $q->where('donor_id', $donor->id);  // ✅ استخدام donor_id

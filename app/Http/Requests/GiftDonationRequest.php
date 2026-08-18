@@ -14,10 +14,14 @@ class GiftDonationRequest extends FormRequest
     public function rules()
     {
         return [
-            'donation_id' => 'required|exists:donations,id',
-            'recipient_name' => 'required|string|max:255',
+            'campaign_id'     => 'required|exists:campaigns,id',
+            'amount'          => 'required|numeric|min:1',
+            'currency'        => 'nullable|string|max:3',
+            'payment_method'  => 'required|string',
+            'recipient_name'  => 'required|string|max:255',
             'recipient_email' => 'required|email|max:255',
-            'message' => 'nullable|string|max:1000',
+            'message'         => 'nullable|string|max:1000',
+            'is_anonymous'    => 'nullable|boolean',
         ];
     }
 }
