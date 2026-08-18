@@ -136,7 +136,7 @@ class CampaignController extends Controller
     /**
      * ✅ من الملف الثاني: Get all campaigns (بدون Pagination)
      */
- 
+
     // 1. عرض كل الحملات
     public function getAll(Request $request)
     {
@@ -178,7 +178,7 @@ class CampaignController extends Controller
      */
     public function featured(Request $request)
     {
-        $campaigns = Campaign::where('status', 'نشطة')
+        $campaigns = Campaign::where('status', 'active')
             ->orderBy('is_emergency', 'desc')
             ->orderBy('created_at', 'desc')
             ->limit(5)
@@ -370,7 +370,7 @@ class CampaignController extends Controller
          }
 
          $campaign = Campaign::create($data);
-         
+
          $campaign->achieved_amount = 0;
          $campaign->donors_count = 0;
          $campaign->progress_percentage = 0;
@@ -763,6 +763,6 @@ class CampaignController extends Controller
             });
 
         return response()->json($campaigns);
-    }    
+    }
 
 }
