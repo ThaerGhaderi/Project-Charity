@@ -1455,10 +1455,10 @@ public function pendingApprovals(Request $request)
 
     /**
      * ✅ تابع جديد: جلب مهام متطوع محدد (عبر الـ ID)
-     */
-    public function getVolunteerTasks($volunteerId, Request $request)
+     */    public function getVolunteerTasks($userId, Request $request)
     {
-        $volunteer = VolunterProfile::find($volunteerId);
+        // نبحث عن الملف الشخصي للمتطوع باستخدام user_id
+        $volunteer = VolunterProfile::where('user_id', $userId)->first();
 
         if (!$volunteer) {
             return response()->json([
@@ -1468,10 +1468,10 @@ public function pendingApprovals(Request $request)
             ], 404);
         }
 
-        $query = VolunteerTask::where('volunteer_id', $volunteerId)
+        // نستخدم $volunteer->id الصحيح
+        $query = VolunteerTask::where('volunteer_id', $volunteer->id)
             ->with(['supervisor', 'beneficiary', 'aidApplication', 'visit', 'campaign', 'checkIns']);
 
-        // تصفية حسب الحالة (اختياري للواجهة)
         if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
@@ -1512,7 +1512,7 @@ public function pendingApprovals(Request $request)
             ]
         ], 200);
     }
-        /**
+    /**
      * ✅ تابع إنشاء مهمة متطوع يدوياً (مطابق للـ Migration)
      */
     public function store(Request $request)
@@ -1521,7 +1521,7 @@ public function pendingApprovals(Request $request)
             'title' => 'required|string|max:255',
             'category' => 'nullable|string|max:255',
             'priority' => 'nullable|string',
-            'volunteerId' => 'nullable|integer|exists:volunter_profiles,id',
+            'volunteerId' => 'nullable|integer|exists:volunter_profiles,user_id', // 👈 تم تعديل الـ exists هنا
             'due' => 'nullable|date',
             'location' => 'nullable|string|max:255',
             'status' => 'nullable|string',
@@ -1533,7 +1533,7 @@ public function pendingApprovals(Request $request)
             $admin = User::whereIn('role', ['admin', 'Admin'])->first();
             $supervisorId = $admin ? $admin->id : 1;
 
-            // 2. ترجمة الأولوية (Priority) لتتطابق مع الـ Enum في قاعدة البيانات
+            // 2. ترجمة الأولوية (Priority) لتتطابق مع الـ Enum
             $priorityMap = [
                 'عاجل' => 'عاجلة',
                 'متوسط' => 'متوسطة',
@@ -1541,7 +1541,7 @@ public function pendingApprovals(Request $request)
             ];
             $priority = $priorityMap[$validated['priority'] ?? 'متوسط'] ?? 'متوسطة';
 
-            // 3. ترجمة الحالة (Status) لتتطابق مع الـ Enum في قاعدة البيانات
+            // 3. ترجمة الحالة (Status) لتتطابق مع الـ Enum
             $statusMap = [
                 'جديد' => 'جديدة',
                 'قيد التنفيذ' => 'قيد التنفيذ',
@@ -1551,20 +1551,31 @@ public function pendingApprovals(Request $request)
             ];
             $status = $statusMap[$validated['status'] ?? 'جديد'] ?? 'جديدة';
 
-            // 4. دمج (التصنيف والملاحظات) في حقل الوصف (description) لأن الجدول لا يملك حقل category
+            // 4. دمج (التصنيف والملاحظات) في حقل الوصف
             $description = $validated['note'] ?? '';
             if (isset($validated['category']) && $validated['category'] !== 'مهام عامة') {
                 $description = "التصنيف: " . $validated['category'] . "\n" . $description;
             }
 
-            // 5. إنشاء المهمة بحقول تطابق الـ Migration تماماً
+            // 5. معالجة المتطوع إذا تم إرساله (لأننا نستقبل user_id)
+            $volunteerProfileId = null;
+            if (isset($validated['volunteerId'])) {
+                $volunteerProfile = VolunterProfile::where('user_id', $validated['volunteerId'])->first();
+                if ($volunteerProfile) {
+                    $volunteerProfileId = $volunteerProfile->id;
+                    // 👈 تغيير حالة المتطوع إلى "مشغول" فور إسناد المهمة له
+                    $volunteerProfile->update(['status' => 'منشغل']);
+                }
+            }
+
+            // 6. إنشاء المهمة بحقول تطابق الـ Migration تماماً
             $task = VolunteerTask::create([
                 'title' => $validated['title'],
                 'description' => $description,
                 'location' => $validated['location'] ?? null,
                 'priority' => $priority,
-                'due_date' => $validated['due'] ?? null, // الرايكت يرسل due والداتا بيز تطلب due_date
-                'volunteer_id' => $validated['volunteerId'] ?? null, // الرايكت يرسل volunteerId والداتا بيز تطلب volunteer_id
+                'due_date' => $validated['due'] ?? null,
+                'volunteer_id' => $volunteerProfileId, // 👈 نستخدم الـ id الصحيح للملف الشخصي
                 'supervisor_id' => $supervisorId,
                 'status' => $status,
                 'progress_percentage' => 0,
@@ -1644,9 +1655,11 @@ public function pendingApprovals(Request $request)
       /**
      * ✅ إسناد مهمة لمتطوع معين (للأدمن)
      */
+       /**
+     * ✅ إسناد مهمة لمتطوع معين (للأدمن)
+     */
     public function assign($id, Request $request)
     {
-        // نتحقق أن الـ ID المرسل موجود كـ user_id في جدول volunter_profiles
         $validated = $request->validate([
             'volunteer_id' => 'required|integer|exists:volunter_profiles,user_id',
         ]);
@@ -1666,12 +1679,15 @@ public function pendingApprovals(Request $request)
 
             // إسناد المهمة للمتطوع وتغيير حالتها إلى قيد التنفيذ
             $task->update([
-                'volunteer_id' => $volunteerProfile->id, // 👈 نستخدم الـ id الصحيح للملف الشخصي
+                'volunteer_id' => $volunteerProfile->id,
                 'status' => 'قيد التنفيذ',
                 'supervisor_id' => $request->user()->id ?? 1,
             ]);
 
-            // إرسال إشعار للمتطوع (اختياري)
+            // 👈 تغيير حالة المتطوع إلى "منشغل"
+            $volunteerProfile->update(['status' => 'منشغل']);
+
+            // إرسال إشعار للمتطوع
             if ($volunteerProfile->user) {
                 Notification::sendPushOnly(
                     $volunteerProfile->user->id,
@@ -1701,9 +1717,12 @@ public function pendingApprovals(Request $request)
     /**
      * ✅ تابع جديد: إتمام مهمة متطوع يدوياً من لوحة التحكم
      */
+    /**
+     * ✅ إتمام مهمة متطوع يدوياً من لوحة التحكم
+     */
     public function completeTaskForAdmin($id, Request $request)
     {
-        $task = VolunteerTask::find($id);
+        $task = VolunteerTask::with('volunteer')->find($id);
 
         if (!$task) {
             return response()->json([
@@ -1718,19 +1737,28 @@ public function pendingApprovals(Request $request)
             $task->update([
                 'status' => 'مكتملة',
                 'completed_at' => now(),
+                'end_time' => now(),
                 'progress_percentage' => 100,
-                'awaiting_approval' => null, // إلغاء أي طلبات معلقة
+                'awaiting_approval' => null,
             ]);
 
-            // إذا كانت المهمة مرتبطة بطلب مساعدة، نحدث حالته أيضاً
-            if ($task->aidApplication) {
-                $task->aidApplication->update([
-                    'status' => 'completed',
-                    'completed_at' => now(),
-                ]);
+            // 👈 إرجاع حالة المتطوع إلى "متاح"
+            if ($task->volunteer) {
+                $task->volunteer->update(['status' => 'متاح']);
+
+                // إغلاق أي تسجيل حضور مفتوح للمهمة
+                VolunteerCheckIn::where('task_id', $task->id)
+                    ->whereNull('check_out_time')
+                    ->update([
+                        'check_out_time' => now(),
+                        'status' => 'منصرف'
+                    ]);
             }
 
-            // إذا كانت المهمة مرتبطة بزيارة، نحدث حالتها
+            if ($task->aidApplication) {
+                $task->aidApplication->update(['status' => 'completed', 'completed_at' => now()]);
+            }
+
             if ($task->visit) {
                 $task->visit->update(['status' => 'مكتملة']);
             }
@@ -1751,7 +1779,113 @@ public function pendingApprovals(Request $request)
             ], 500);
         }
     }
+    /**
+     * ✅ تقييم أداء المتطوع في مهمة معينة (احترافي)
+     * يستخدم updateOrCreate للسماح بتعديل التقييم إذا تم إدخاله مسبقاً
+     */
+    public function evaluate(Request $request, $id)
+    {
+        // 1. التحقق من البيانات القادمة من الواجهة
+        $validated = $request->validate([
+            'rating' => 'required|numeric|min:1|max:5',
+            'feedback' => 'nullable|string|max:1000',
+        ]);
 
+        // 2. جلب المهمة مع علاقة المتطوع
+        $task = VolunteerTask::with('volunteer.user')->find($id);
 
+        if (!$task) {
+            return response()->json([
+                'code' => '404',
+                'success' => false,
+                'message' => 'المهمة غير موجودة'
+            ], 404);
+        }
 
+        // 3. التأكد من أن المهمة مسندة لمتطوع حتى يمكن تقييمه
+        if (!$task->volunteer_id) {
+            return response()->json([
+                'code' => '400',
+                'success' => false,
+                'message' => 'هذه المهمة غير مسندة لأي متطوع لتقييمه'
+            ], 400);
+        }
+
+        try {
+            // 4. إنشاء أو تحديث التقييم (updateOrCreate)
+            // نبحث بالـ task_id و volunteer_id، إذا وجدناه نحدثه، إذا لم نجده ننشئه
+            $evaluation = VolunteerEvaluation::updateOrCreate(
+                ['task_id' => $task->id, 'volunteer_id' => $task->volunteer_id],
+                [
+                    'supervisor_id' => $request->user()->id ?? 1, // الأدمن الذي قام بالتقييم
+                    'rating' => $validated['rating'],
+                    'feedback' => $validated['feedback'] ?? null,
+                    'evaluated_at' => now(),
+                ]
+            );
+
+            // 5. إرسال إشعار للمتطوع بإتمام تقييمه (إضافة احترافية)
+            if ($task->volunteer && $task->volunteer->user) {
+                Notification::sendPushOnly(
+                    $task->volunteer->user->id,
+                    '⭐ تم تقييم أدائك',
+                    "تم تقييم أدائك في المهمة '{$task->title}' بتقييم {$validated['rating']} من 5.",
+                    'task_evaluated',
+                    ['task_id' => $task->id, 'rating' => $validated['rating']]
+                );
+            }
+
+            return response()->json([
+                'code' => '200',
+                'success' => true,
+                'message' => 'تم حفظ تقييم المتطوع بنجاح',
+                'data' => $evaluation
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'code' => '500',
+                'success' => false,
+                'message' => 'حدث خطأ أثناء حفظ التقييم',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * ✅ دالة مساعدة لتفعيل المهمة وإنشاء Check-in
+     */
+    private function activateTask($task, $volunteer, $request, $checkInData = null)
+    {
+        $task->update([
+            'status' => 'قيد التنفيذ',
+            'start_time' => now(),
+            'awaiting_approval' => null,
+            'reviewed_by' => $request->user()->id ?? 1,
+            'reviewed_at' => now(),
+        ]);
+
+        // إنشاء تسجيل حضور (Check-in) للمتطوع
+        VolunteerCheckIn::create([
+            'task_id' => $task->id,
+            'volunteer_id' => $volunteer->id,
+            'check_in_time' => now(),
+            'check_out_time' => null,
+            'status' => 'حاضر',
+            'location_verified' => true,
+            'latitude' => $request->latitude ?? null,
+            'longitude' => $request->longitude ?? null,
+            'notes' => 'بدأت بواسطة الموافقة الإدارية',
+        ]);
+
+        // تغيير حالة المتطوع إلى "منشغل"
+        $volunteer->update(['status' => 'منشغل']);
+
+        return response()->json([
+            'code' => '200',
+            'success' => true,
+            'message' => 'تم تفعيل المهمة بنجاح',
+            'data' => $task->fresh()
+        ], 200);
+    }
 }
