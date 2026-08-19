@@ -268,6 +268,13 @@ Route::prefix('chat')->middleware('auth:sanctum')->group(function () {
     Route::post('/conversations/{id}/messages', [ChatController::class, 'sendMessage']); //!ارسال رسالة في المحادثة
 });
 
+Route::prefix('admin')->group(function () {
+Route::get('/notifications', [NotificationController::class, 'getAll']);
+Route::patch('/notifications/{id}/read', [NotificationController::class, 'markRead']);
+Route::patch('/notifications/read-all', [NotificationController::class, 'markAllRead']);
+Route::delete('/notifications/{id}', [NotificationController::class, 'delete']);
+});
+
 
 
 // ==================== BENEFICIARIES ROUTES (Admin) ====================
@@ -378,6 +385,11 @@ Route::post('/stripe/webhook', [DonationController::class, 'handleStripeWebhook'
 
     Route::get('reports/dashboard-stats',[ReportController::class,'dasgboardStats']);
     Route::get('/campaigns/show/{id}', [CampaignController::class, 'showCampaignForWebsite']);
+
+
+Route::post('/donations/stripe/free', [DonationController::class, 'createFreeStripePayment']);
+Route::post('/donations/stripe/gift', [DonationController::class, 'createGiftStripePayment']);
+Route::post('/donations/stripe/recurring', [DonationController::class, 'createRecurringStripePayment']);
 
     // ✅ حل سحري لـ FrankenPHP: توجيه طلبات الـ Rewrite الإجبارية إلى دالة التسجيل مباشرة
 

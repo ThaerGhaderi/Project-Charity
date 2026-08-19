@@ -837,5 +837,187 @@ public function handleStripeWebhook(Request $request)
     }
 
 
+    /**
+     * 1. تبرع حر (Free Donation) - دفع لمرة واحدة
+     */
+    public function createFreeStripePayment(Request $request)
+    {
+        $request->validate([
+            'campaign_id' => 'required|exists:campaigns,id',
+            'amount' => 'required|numeric|min:1',
+            'is_anonymous' => 'boolean',
+        ]);
+
+        $user = $request->user();
+        $donor = $user->donor;
+        $campaign = Campaign::findOrFail($request->campaign_id);
+
+        try {
+            $donation = Donation::create([
+                'donor_id' => $donor->id,
+                'campaign_id' => $campaign->id,
+                'amount' => $request->amount,
+                'currency' => 'USD',
+                'payment_method' => 'stripe',
+                'payment_gateway' => 'stripe',
+                'status' => 'pending',
+                'is_anonymous' => $request->is_anonymous ?? false,
+                'is_recurring' => false,
+                'is_gift' => false,
+                'donated_at' => now()
+            ]);
+
+            $stripe = new \Stripe\StripeClient(config('services.stripe.secret'));
+            $session = $stripe->checkout->sessions->create([
+                'payment_method_types' => ['card'],
+                'line_items' => [[
+                    'price_data' => [
+                        'currency' => 'usd',
+                        'product_data' => ['name' => "تبرع لحملة: {$campaign->title}"],
+                        'unit_amount' => (int) ($request->amount * 100),
+                    ],
+                    'quantity' => 1,
+                ]],
+                'mode' => 'payment', // دفع لمرة واحدة
+                'success_url' => config('services.frontend_url') . '/payment/success?donation=' . $donation->id,
+                'cancel_url' => config('services.frontend_url') . '/payment/cancel?donation=' . $donation->id,
+                'metadata' => ['donation_id' => (string) $donation->id],
+            ]);
+
+            $donation->update(['gateway_payment_id' => $session->id]);
+
+            return response()->json([
+                'success' => true,
+                'checkout_url' => $session->url
+            ], 201);
+
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * 2. تبرع إهدائي (Gift Donation) - مستقل تماماً
+     */
+    public function createGiftStripePayment(Request $request)
+    {
+        $request->validate([
+            'campaign_id' => 'required|exists:campaigns,id',
+            'amount' => 'required|numeric|min:1',
+            'on_behalf_of' => 'required|string|max:255', // اسم المهدى إليه
+            'gift_message' => 'nullable|string|max:500',
+        ]);
+
+        $user = $request->user();
+        $donor = $user->donor;
+        $campaign = Campaign::findOrFail($request->campaign_id);
+
+        try {
+            $donation = Donation::create([
+                'donor_id' => $donor->id,
+                'campaign_id' => $campaign->id,
+                'amount' => $request->amount,
+                'currency' => 'USD',
+                'payment_method' => 'stripe',
+                'payment_gateway' => 'stripe',
+                'status' => 'pending',
+                'is_gift' => true, // تبرع إهدائي
+                'on_behalf_of' => $request->on_behalf_of,
+                'gift_message' => $request->gift_message,
+                'donated_at' => now()
+            ]);
+
+            $stripe = new \Stripe\StripeClient(config('services.stripe.secret'));
+            $session = $stripe->checkout->sessions->create([
+                'payment_method_types' => ['card'],
+                'line_items' => [[
+                    'price_data' => [
+                        'currency' => 'usd',
+                        'product_data' => ['name' => "تبرع إهدائي لحملة: {$campaign->title}"],
+                        'unit_amount' => (int) ($request->amount * 100),
+                    ],
+                    'quantity' => 1,
+                ]],
+                'mode' => 'payment',
+                'success_url' => config('services.frontend_url') . '/payment/success?donation=' . $donation->id,
+                'cancel_url' => config('services.frontend_url') . '/payment/cancel?donation=' . $donation->id,
+                'metadata' => ['donation_id' => (string) $donation->id],
+            ]);
+
+            $donation->update(['gateway_payment_id' => $session->id]);
+
+            return response()->json([
+                'success' => true,
+                'checkout_url' => $session->url
+            ], 201);
+
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * 3. تبرع دوري (Recurring Donation) - اشتراك شهري
+     */
+    public function createRecurringStripePayment(Request $request)
+    {
+        $request->validate([
+            'campaign_id' => 'required|exists:campaigns,id',
+            'amount' => 'required|numeric|min:1', // المبلغ الشهري
+        ]);
+
+        $user = $request->user();
+        $donor = $user->donor;
+        $campaign = Campaign::findOrFail($request->campaign_id);
+
+        try {
+            $donation = Donation::create([
+                'donor_id' => $donor->id,
+                'campaign_id' => $campaign->id,
+                'amount' => $request->amount, // المبلغ المتكرر
+                'currency' => 'USD',
+                'payment_method' => 'stripe',
+                'payment_gateway' => 'stripe',
+                'status' => 'pending',
+                'is_recurring' => true, // تبرع دوري
+                'donated_at' => now()
+            ]);
+
+            $stripe = new \Stripe\StripeClient(config('services.stripe.secret'));
+
+            // في التبرع الدوري، يجب إنشاء Price أو استخدام Price موجود مسبقاً في Stripe
+            // هنا نقوم بإنشاء Price مؤقت شهري (كل شهر)
+            $price = $stripe->prices->create([
+                'unit_amount' => (int) ($request->amount * 100),
+                'currency' => 'usd',
+                'recurring' => ['interval' => 'month'], // يتكرر شهرياً
+                'product_data' => ['name' => "اشتراك شهري لحملة: {$campaign->title}"],
+            ]);
+
+            $session = $stripe->checkout->sessions->create([
+                'payment_method_types' => ['card'],
+                'line_items' => [[
+                    'price' => $price->id,
+                    'quantity' => 1,
+                ]],
+                'mode' => 'subscription', // وضع الاشتراك الدوري
+                'success_url' => config('services.frontend_url') . '/payment/success?donation=' . $donation->id,
+                'cancel_url' => config('services.frontend_url') . '/payment/cancel?donation=' . $donation->id,
+                'metadata' => ['donation_id' => (string) $donation->id],
+            ]);
+
+            $donation->update(['gateway_payment_id' => $session->id]);
+
+            return response()->json([
+                'success' => true,
+                'checkout_url' => $session->url
+            ], 201);
+
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+
 
     }

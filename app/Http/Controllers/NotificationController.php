@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers;  
+namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\Notification;
@@ -16,7 +16,7 @@ class NotificationController extends Controller
     public function registerToken(Request $request)
     {
         $user = $request->user();
-        
+
         if (!$user) {
             return response()->json([
                 'success' => false,
@@ -44,14 +44,14 @@ class NotificationController extends Controller
     public function removeToken(Request $request)
     {
         $user = $request->user();
-        
+
         if (!$user) {
             return response()->json([
                 'success' => false,
                 'message' => 'يجب تسجيل الدخول أولاً'
             ], 401);
         }
-        
+
         $user->removeFcmToken();
 
         return response()->json([
@@ -67,7 +67,7 @@ class NotificationController extends Controller
     public function testPush(Request $request)
     {
         $user = $request->user();
-        
+
         if (!$user) {
             return response()->json([
                 'success' => false,
@@ -103,14 +103,14 @@ class NotificationController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
-        
+
         if (!$user) {
             return response()->json([
                 'success' => false,
                 'message' => 'يجب تسجيل الدخول أولاً'
             ], 401);
         }
-        
+
         $notifications = Notification::where('user_id', $user->id)
             ->orderBy('created_at', 'desc')
             ->paginate($request->get('per_page', 20));
@@ -131,14 +131,14 @@ class NotificationController extends Controller
     public function unreadCount(Request $request)
     {
         $user = $request->user();
-        
+
         if (!$user) {
             return response()->json([
                 'success' => false,
                 'message' => 'يجب تسجيل الدخول أولاً'
             ], 401);
         }
-        
+
         $count = Notification::where('user_id', $user->id)
             ->where('is_read', false)
             ->count();
@@ -152,14 +152,14 @@ class NotificationController extends Controller
     public function markAsRead($id, Request $request)
     {
         $user = $request->user();
-        
+
         if (!$user) {
             return response()->json([
                 'success' => false,
                 'message' => 'يجب تسجيل الدخول أولاً'
             ], 401);
         }
-        
+
         $notification = Notification::where('user_id', $user->id)
             ->where('id', $id)
             ->firstOrFail();
@@ -175,14 +175,14 @@ class NotificationController extends Controller
     public function markAllAsRead(Request $request)
     {
         $user = $request->user();
-        
+
         if (!$user) {
             return response()->json([
                 'success' => false,
                 'message' => 'يجب تسجيل الدخول أولاً'
             ], 401);
         }
-        
+
         Notification::where('user_id', $user->id)
             ->where('is_read', false)
             ->update(['is_read' => true]);
@@ -196,14 +196,14 @@ class NotificationController extends Controller
     public function destroy($id, Request $request)
     {
         $user = $request->user();
-        
+
         if (!$user) {
             return response()->json([
                 'success' => false,
                 'message' => 'يجب تسجيل الدخول أولاً'
             ], 401);
         }
-        
+
         $notification = Notification::where('user_id', $user->id)
             ->where('id', $id)
             ->firstOrFail();
@@ -219,14 +219,14 @@ class NotificationController extends Controller
     public function deleteAll(Request $request)
     {
         $user = $request->user();
-        
+
         if (!$user) {
             return response()->json([
                 'success' => false,
                 'message' => 'يجب تسجيل الدخول أولاً'
             ], 401);
         }
-        
+
         Notification::where('user_id', $user->id)->delete();
 
         return response()->json([
@@ -238,16 +238,16 @@ class NotificationController extends Controller
     public function preferences(Request $request)
     {
         $user = $request->user();
-        
+
         if (!$user) {
             return response()->json([
                 'success' => false,
                 'message' => 'يجب تسجيل الدخول أولاً'
             ], 401);
         }
-        
+
         $preferences = $user->notificationPreferences;
-        
+
         if (!$preferences) {
             $preferences = NotificationPreference::create([
                 'user_id' => $user->id,
@@ -267,14 +267,14 @@ class NotificationController extends Controller
     public function updatePreferences(Request $request)
     {
         $user = $request->user();
-        
+
         if (!$user) {
             return response()->json([
                 'success' => false,
                 'message' => 'يجب تسجيل الدخول أولاً'
             ], 401);
         }
-        
+
         $validated = $request->validate([
             'push_enabled' => 'boolean',
             'email_enabled' => 'boolean',
@@ -283,7 +283,7 @@ class NotificationController extends Controller
         ]);
 
         $preferences = $user->notificationPreferences;
-        
+
         if (!$preferences) {
             $preferences = NotificationPreference::create(array_merge(
                 ['user_id' => $user->id],
@@ -298,5 +298,76 @@ class NotificationController extends Controller
             'message' => 'تم تحديث تفضيلات الإشعارات',
             'data' => $preferences
         ], 200);
+    }
+
+
+ public function getAll(Request $request)
+    {
+        $query = Notification::with('user:id,name,email')->orderBy('created_at', 'desc');
+        $notifications = $query->paginate($request->get('per_page', 20));
+        return response()->json([
+            'success' => true,
+            'data' => $notifications->items(),
+            'meta' => [
+                'current_page' => $notifications->currentPage(),
+                'last_page' => $notifications->lastPage(),
+                'total' => $notifications->total(),
+            ],
+        ]);
+    }
+     public function show($id)
+    {
+        $notification = Notification::with('user:id,name,email')->find($id);
+        if (!$notification) {
+            return response()->json([
+                'success' => false,
+                'message' => 'الإشعار غير موجود',
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $notification,
+        ]);
+    }
+    public function delete($id)
+    {
+        $notification = Notification::find($id);
+
+        if (!$notification) {
+            return response()->json(['success' => false, 'message' => 'الإشعار غير موجود'], 404);
+        }
+        $notification->delete();
+        return response()->json(['success' => true, 'message' => 'تم حذف الإشعار']);
+    }
+    public function markRead($id)
+    {
+        $notification = Notification::find($id);
+
+        if (!$notification) {
+            return response()->json(['success' => false, 'message' => 'الإشعار غير موجود'], 404);
+        }
+
+        $notification->markAsRead();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'تم تعليم الإشعار كمقروء',
+            'data' => $notification,
+        ]);
+    }
+    public function markAllRead(Request $request)
+    {
+        $request->validate(['user_id' => 'required|exists:users,id']);
+
+        $count = Notification::where('user_id', $request->user_id)
+            ->unread()
+            ->update(['is_read' => true]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'تم تعليم جميع الإشعارات كمقروءة',
+            'updated_count' => $count,
+        ]);
     }
 }
