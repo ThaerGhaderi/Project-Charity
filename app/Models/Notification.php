@@ -128,7 +128,7 @@ class Notification extends Model
                             'aps' => [
                                 'sound' => 'default',
                                 'badge' => 1,
-                                'content-available' => true,
+                                'content-available' => 1, // 👈 تم التعديل إلى رقم 1
                             ],
                         ],
                     ])
