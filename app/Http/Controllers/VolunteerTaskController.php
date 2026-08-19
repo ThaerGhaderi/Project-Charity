@@ -1641,13 +1641,14 @@ public function pendingApprovals(Request $request)
             ], 500);
         }
     }
-    /**
+      /**
      * ✅ إسناد مهمة لمتطوع معين (للأدمن)
      */
     public function assign($id, Request $request)
     {
+        // نتحقق أن الـ ID المرسل موجود كـ user_id في جدول volunter_profiles
         $validated = $request->validate([
-            'volunteer_id' => 'required|integer|exists:volunter_profiles,id',
+            'volunteer_id' => 'required|integer|exists:volunter_profiles,user_id',
         ]);
 
         $task = VolunteerTask::find($id);
@@ -1660,18 +1661,20 @@ public function pendingApprovals(Request $request)
         }
 
         try {
+            // نجلب الـ VolunterProfile الصحيح باستخدام user_id
+            $volunteerProfile = VolunterProfile::where('user_id', $validated['volunteer_id'])->first();
+
             // إسناد المهمة للمتطوع وتغيير حالتها إلى قيد التنفيذ
             $task->update([
-                'volunteer_id' => $validated['volunteer_id'],
+                'volunteer_id' => $volunteerProfile->id, // 👈 نستخدم الـ id الصحيح للملف الشخصي
                 'status' => 'قيد التنفيذ',
                 'supervisor_id' => $request->user()->id ?? 1,
             ]);
 
             // إرسال إشعار للمتطوع (اختياري)
-            $volunteer = VolunterProfile::with('user')->find($validated['volunteer_id']);
-            if ($volunteer && $volunteer->user) {
+            if ($volunteerProfile->user) {
                 Notification::sendPushOnly(
-                    $volunteer->user->id,
+                    $volunteerProfile->user->id,
                     '📢 تم إسناد مهمة جديدة لك',
                     "تم إسناد المهمة '{$task->title}' إليك من قبل الإدارة.",
                     'task_assigned',
