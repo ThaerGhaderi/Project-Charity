@@ -358,11 +358,8 @@ class NotificationController extends Controller
     }
     public function markAllRead(Request $request)
     {
-        $request->validate(['user_id' => 'required|exists:users,id']);
-
-        $count = Notification::where('user_id', $request->user_id)
-            ->unread()
-            ->update(['is_read' => true]);
+        // ✅ تحديد كل إشعارات النظام كمقروءة (صلاحية الأدمن)
+        $count = Notification::unread()->update(['is_read' => true]);
 
         return response()->json([
             'success' => true,
