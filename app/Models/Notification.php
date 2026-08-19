@@ -92,7 +92,7 @@ class Notification extends Model
         return $notification;
     }
 
-    public function sendPushNotification()
+     public function sendPushNotification()
     {
         $user = $this->user;
 
@@ -103,28 +103,39 @@ class Notification extends Model
         try {
             $messaging = app(\Kreait\Firebase\Messaging::class);
 
-            // ✅ إرسال إشعار من نوع Data-Only (الأفضل لتطبيقات فلاتر)
             $message = CloudMessage::withTarget('token', $user->fcm_token)
+                ->withNotification(FirebaseNotification::create(
+                    $this->title,
+                    $this->body
+                ))
                 ->withAndroidConfig(
                     \Kreait\Firebase\Messaging\AndroidConfig::fromArray([
-                        'priority' => 'high',
+                        'priority' => 'high', // ✅ يجب أن تكون هنا في الجذر الرئيسي
+                        'notification' => [
+                            'channel_id' => 'high_importance_channel',
+                            'sound' => 'default',
+                            'default_vibrate_timings' => true,
+                            'default_light_settings' => true,
+                        ],
                     ])
                 )
                 ->withApnsConfig(
                     \Kreait\Firebase\Messaging\ApnsConfig::fromArray([
-                        'payload' => [
-                            'aps' => [
-                                'content-available' => true, // يوقظ التطبيق في الخلفية
-                            ],
-                        ],
                         'headers' => [
                             'apns-priority' => '10',
+                        ],
+                        'payload' => [
+                            'aps' => [
+                                'sound' => 'default',
+                                'badge' => 1,
+                                'content-available' => true,
+                            ],
                         ],
                     ])
                 )
                 ->withData([
-                    'title' => $this->title,         // 👈 العنوان داخل الداتا
-                    'body' => $this->body,           // 👈 النص داخل الداتا
+                    'title' => $this->title,
+                    'body' => $this->body,
                     'type' => $this->type,
                     'notification_id' => (string) $this->id,
                     'click_action' => $this->getClickAction(),
@@ -133,14 +144,14 @@ class Notification extends Model
 
             $messaging->send($message);
 
-            Log::info("Firebase Data-Only push sent to user {$user->id}", [
+            Log::info("Firebase push sent to user {$user->id}", [
                 'notification_id' => $this->id
             ]);
 
             return true;
 
         } catch (\Exception $e) {
-            // ✅ تسجيل الخطأ بشكل صريح لكي نراه في قاعدة البيانات
+            // ✅ تخزين الخطأ في قاعدة البيانات لنراه إن حدث
             $this->firebase_error = $e->getMessage();
             $this->save();
 
