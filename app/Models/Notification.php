@@ -92,7 +92,6 @@ class Notification extends Model
         return $notification;
     }
 
-
     public function sendPushNotification()
     {
         $user = $this->user;
@@ -104,40 +103,18 @@ class Notification extends Model
         try {
             $messaging = app(\Kreait\Firebase\Messaging::class);
 
-            // ✅ تجميع كل البيانات في مصفوفة واحدة ليرسلها الـ Flutter
-            $dataPayload = [
-                'notification_id' => (string) $this->id,
-                'type' => $this->type,
-                'title' => $this->title,       // 👈 أضفنا العنوان داخل الداتا
-                'body' => $this->body,         // 👈 أضفنا النص داخل الداتا
-                'click_action' => $this->getClickAction(),
-                'payload' => json_encode($this->data ?? []), // 👈 أضفنا الـ payload الذي يطلبه الـ Flutter
-            ];
-
+            // ✅ إرسال إشعار من نوع Data-Only (الأفضل لتطبيقات فلاتر)
             $message = CloudMessage::withTarget('token', $user->fcm_token)
-                ->withNotification(FirebaseNotification::create(
-                    $this->title,
-                    $this->body
-                ))
                 ->withAndroidConfig(
                     \Kreait\Firebase\Messaging\AndroidConfig::fromArray([
                         'priority' => 'high',
-                        'notification' => [
-                            'channel_id' => 'high_importance_channel',
-                            'sound' => 'default',
-                            'priority' => 'high',
-                            'default_vibrate_timings' => true,
-                            'default_light_settings' => true,
-                        ],
                     ])
                 )
                 ->withApnsConfig(
                     \Kreait\Firebase\Messaging\ApnsConfig::fromArray([
                         'payload' => [
                             'aps' => [
-                                'sound' => 'default',
-                                'badge' => 1,
-                                'content-available' => true,
+                                'content-available' => true, // يوقظ التطبيق في الخلفية
                             ],
                         ],
                         'headers' => [
@@ -145,17 +122,28 @@ class Notification extends Model
                         ],
                     ])
                 )
-                ->withData($dataPayload); // 👈 إرسال كل البيانات هنا
+                ->withData([
+                    'title' => $this->title,         // 👈 العنوان داخل الداتا
+                    'body' => $this->body,           // 👈 النص داخل الداتا
+                    'type' => $this->type,
+                    'notification_id' => (string) $this->id,
+                    'click_action' => $this->getClickAction(),
+                    'payload' => json_encode($this->data ?? []),
+                ]);
 
             $messaging->send($message);
 
-            Log::info("Firebase push sent to user {$user->id}", [
+            Log::info("Firebase Data-Only push sent to user {$user->id}", [
                 'notification_id' => $this->id
             ]);
 
             return true;
 
         } catch (\Exception $e) {
+            // ✅ تسجيل الخطأ بشكل صريح لكي نراه في قاعدة البيانات
+            $this->firebase_error = $e->getMessage();
+            $this->save();
+
             Log::error('Firebase push failed: ' . $e->getMessage(), [
                 'notification_id' => $this->id,
                 'user_id' => $user->id
