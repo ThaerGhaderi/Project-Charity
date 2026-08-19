@@ -1279,7 +1279,7 @@ public function reviewEndRequest($id, Request $request)
 
 
 
-public function pendingApprovals(Request $request)
+    public function pendingApprovals(Request $request)
     {
         $query = VolunteerTask::whereNotNull('awaiting_approval')
             ->with(['volunteer.user', 'supervisor', 'campaign', 'beneficiary', 'aidApplication', 'visit']);
@@ -1288,7 +1288,8 @@ public function pendingApprovals(Request $request)
             $query->where('awaiting_approval', $request->type); // start | end
         }
 
-        $tasks = $query->orderBy('requested_at', 'desc')->paginate(20);
+        // 👈 تم تغيير paginate(20) إلى get()
+        $tasks = $query->orderBy('requested_at', 'desc')->get();
 
         return response()->json([
             'code' => '200',

@@ -764,5 +764,27 @@ class CampaignController extends Controller
 
         return response()->json($campaigns);
     }
+ public function showCampaignForWebsite($id)
+    {
+        $campaign = Campaign::withSum(['donations as achieved_amount' => function ($q) {
+                $q->where('status', 'completed');
+            }], 'amount')
+            ->withCount(['donations as donors_count' => function ($q) {
+                $q->where('status', 'completed');
+            }])
+            ->find($id);
 
+        if (!$campaign) {
+            return response()->json([
+                'message' => 'الحملة غير موجودة'
+            ], 404);
+        }
+
+        // ننسق البيانات (الدالة لا تُلمس)
+        $data = $this->formatCampaignData($campaign);
+        // 👈 نترجم الحالة للعربية بعد خروجها
+        $data['status'] = $this->translateStatusToArabic($campaign->status);
+
+        return response()->json($data);
+    }
 }
