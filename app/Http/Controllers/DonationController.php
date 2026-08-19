@@ -759,47 +759,58 @@ public function handleStripeWebhook(Request $request)
      * Download donation receipt as PDF
      * GET /api/donor/donations/{id}/pdf
      */
-    public function downloadReceiptPdf($id, Request $request)
-    {$user = $request->user();
-        $donorProfile = DonorProfile::where('user_id', $user->id)->firstOrFail();
+       public function downloadReceiptPdf($id, Request $request)
+    {
+        try {
+            $user = $request->user();
+            $donorProfile = DonorProfile::where('user_id', $user->id)->firstOrFail();
 
-        $donation = Donation::with(['campaign', 'donor.user'])
-            ->where('donor_id', $donorProfile->id)
-            ->where('id', $id)
-            ->firstOrFail();
+            $donation = Donation::with(['campaign', 'donor.user'])
+                ->where('donor_id', $donorProfile->id)
+                ->where('id', $id)
+                ->firstOrFail();
 
-        $data = [
-        'receipt_number'   => 'DON-' . str_pad($donation->id, 8, '0', STR_PAD_LEFT),
-        'campaign_title'   => $donation->campaign->title,
-        'campaign_category'=> $donation->campaign->category ?? 'عامة',
-        'amount'           => number_format($donation->amount, 2),
-        'currency'         => $donation->currency,
-        'payment_method'   => $this->getPaymentMethodName($donation->payment_method),
-        'status'           => $this->getStatusName($donation->status),
-        'date'             => $donation->donated_at->format('Y-m-d H:i:s'),
-        'donor_name'       => $donation->is_anonymous ? 'متبرع مجهول' : $donation->user->name,
-        'is_anonymous'     => $donation->is_anonymous,
-        'campaign_id'      => $donation->campaign_id,
-        'donation_id'      => $donation->id,
-        ];
-    $html = view('pdf.donation_receipt', $data)->render();
-    $mpdf = new Mpdf([
-        'mode'        => 'utf-8',
-        'format'      => 'A4',
-        'orientation' => 'P',
-        'direction'   => 'rtl',
-         'tempDir' => storage_path('app/temp') // 👈 هذا السطر ضروري جداً
+            $data = [
+                'receipt_number'   => 'DON-' . str_pad($donation->id, 8, '0', STR_PAD_LEFT),
+                'campaign_title'   => $donation->campaign->title,
+                'campaign_category'=> $donation->campaign->category ?? 'عامة',
+                'amount'           => number_format($donation->amount, 2),
+                'currency'         => $donation->currency,
+                'payment_method'   => $this->getPaymentMethodName($donation->payment_method),
+                'status'           => $this->getStatusName($donation->status),
+                'date'             => $donation->donated_at->format('Y-m-d H:i:s'),
+                'donor_name'       => $donation->is_anonymous ? 'متبرع مجهول' : $donation->user->name,
+                'is_anonymous'     => $donation->is_anonymous,
+                'campaign_id'      => $donation->campaign_id,
+                'donation_id'      => $donation->id,
+            ];
 
-    ]);
-    $mpdf->WriteHTML($html);
-        // $pdf = Pdf::loadView('pdf.donation_receipt', $data)->setOption('is_unicode', true)->setOption('enable_html5_parser', true);
-    return response($mpdf->Output('receipt.pdf', 'S'))->header('Content-Type', 'application/pdf');
+            $html = view('pdf.donation_receipt', $data)->render();
+            $mpdf = new Mpdf([
+                'mode'        => 'utf-8',
+                'format'      => 'A4',
+                'orientation' => 'P',
+                'direction'   => 'rtl',
+                'tempDir' => storage_path('app/temp')
+            ]);
+
+            $mpdf->WriteHTML($html);
+
+            return response($mpdf->Output('receipt.pdf', 'S'))->header('Content-Type', 'application/pdf');
+
+        } catch (\Exception $e) {
+            // 👈 هذا الجزء سيطبع لنا الخطأ الحقيقي في الشاشة بدلاً من 500 العام
+            return response()->json([
+                'success' => false,
+                'message' => 'حدث خطأ أثناء توليد الـ PDF',
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ], 500);
+        }
+
     }
-
-    /**
-     * ترجمة طريقة الدفع
-     */
-    private function getPaymentMethodName($method): string
+       private function getPaymentMethodName($method): string
     {
         $methods = [
             'stripe' => 'بطاقة ائتمان (Stripe)',
