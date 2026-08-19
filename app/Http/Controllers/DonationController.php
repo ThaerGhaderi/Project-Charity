@@ -788,6 +788,8 @@ public function handleStripeWebhook(Request $request)
         'format'      => 'A4',
         'orientation' => 'P',
         'direction'   => 'rtl',
+         'tempDir' => storage_path('app/temp') // 👈 هذا السطر ضروري جداً
+
     ]);
     $mpdf->WriteHTML($html);
         // $pdf = Pdf::loadView('pdf.donation_receipt', $data)->setOption('is_unicode', true)->setOption('enable_html5_parser', true);
