@@ -37,14 +37,14 @@ class ChatController extends Controller
     /**
      * إنشاء محادثة جديدة
      */
-    public function createConversation(Request $request)
+  public function createConversation(Request $request)
     {
         $user = $request->user();
 
         $validated = $request->validate([
             'type' => 'required|in:private,group,public',
             'name' => 'required_if:type,group|nullable|string|max:255',
-            'participants' => 'required_if:type,group,private|array',
+            'participants' => 'required|array|min:1',
             'participants.*' => 'exists:users,id',
         ]);
 
@@ -59,7 +59,7 @@ class ChatController extends Controller
             ]);
 
             // إضافة المشاركين
-           $participants = array_unique(array_merge([$user->id], $validated['participants']));
+            $participants = array_merge([$user->id], $validated['participants']);
 
             foreach ($participants as $participantId) {
                 ChatParticipant::create([
@@ -88,7 +88,7 @@ class ChatController extends Controller
                 'message' => $e->getMessage()
             ], 500);
         }
-    }
+        }
 public function messages($conversationId, Request $request)
 {
     $user = $request->user();
