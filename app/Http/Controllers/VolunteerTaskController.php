@@ -1424,24 +1424,19 @@ public function pendingApprovals(Request $request)
 
         $tasks = $query->latest()->get();
 
-        $tasks->transform(function ($task) {
-            $task->status_text = $task->status_text;
+              $tasks->transform(function ($task) {
+            $task->status_text = $task->status;
             $task->source_type = $task->source_type;
             $task->source_name = $task->source_name;
             $task->beneficiary_name = $task->beneficiary_name;
 
-            // إضافة معلومات إضافية إذا كانت المهمة مرتبطة بحملة أو طلب مساعدة
+            // 👈 إضافة الـ user_id للمتطوع لكي تعرفه الواجهة
+            $task->volunteer_user_id = $task->volunteer ? $task->volunteer->user_id : null;
+            $task->volunteer_name = $task->volunteer && $task->volunteer->user ? $task->volunteer->user->name : 'غير محدد';
+
             if ($task->campaign) {
                 $task->campaign_title = $task->campaign->title;
             }
-            if ($task->aidApplication) {
-                $task->aid_type = $task->aidApplication->type;
-                $task->aid_is_urgent = $task->aidApplication->is_urgent;
-            }
-            if ($task->visit) {
-                $task->visit_date = $task->visit->formatted_date;
-            }
-
             return $task;
         });
 
