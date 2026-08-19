@@ -325,7 +325,7 @@ Route::delete('/all-visits/delete-all', [VisitController::class, 'deleteAllVisit
 Route::delete('/all-visits/{id}', [VisitController::class, 'destroy2']); // حذف زيارة واحدة
 // راوت إضافة زيارة من لوحة التحكم
 Route::post('/all-visits', [VisitController::class, 'storeAdminVisit']);
-
+Route::post('/volunteer-tasks/{id}/complete', [VolunteerTaskController::class, 'completeTaskForAdmin']);
 
 // ==================== EXPORT DONATIONS ====================
 Route::get('/users/exportDonations', [DorationController::class, 'export']);

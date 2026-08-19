@@ -1641,5 +1641,114 @@ public function pendingApprovals(Request $request)
             ], 500);
         }
     }
+    /**
+     * ✅ إسناد مهمة لمتطوع معين (للأدمن)
+     */
+    public function assign($id, Request $request)
+    {
+        $validated = $request->validate([
+            'volunteer_id' => 'required|integer|exists:volunter_profiles,id',
+        ]);
+
+        $task = VolunteerTask::find($id);
+        if (!$task) {
+            return response()->json([
+                'code' => '404',
+                'success' => false,
+                'message' => 'المهمة غير موجودة'
+            ], 404);
+        }
+
+        try {
+            // إسناد المهمة للمتطوع وتغيير حالتها إلى قيد التنفيذ
+            $task->update([
+                'volunteer_id' => $validated['volunteer_id'],
+                'status' => 'قيد التنفيذ',
+                'supervisor_id' => $request->user()->id ?? 1,
+            ]);
+
+            // إرسال إشعار للمتطوع (اختياري)
+            $volunteer = VolunterProfile::with('user')->find($validated['volunteer_id']);
+            if ($volunteer && $volunteer->user) {
+                Notification::sendPushOnly(
+                    $volunteer->user->id,
+                    '📢 تم إسناد مهمة جديدة لك',
+                    "تم إسناد المهمة '{$task->title}' إليك من قبل الإدارة.",
+                    'task_assigned',
+                    ['task_id' => $task->id]
+                );
+            }
+
+            return response()->json([
+                'code' => '200',
+                'success' => true,
+                'message' => 'تم إسناد المهمة بنجاح',
+                'data' => $task->fresh()
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'code' => '500',
+                'success' => false,
+                'message' => 'حدث خطأ أثناء إسناد المهمة',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    /**
+     * ✅ تابع جديد: إتمام مهمة متطوع يدوياً من لوحة التحكم
+     */
+    public function completeTaskForAdmin($id, Request $request)
+    {
+        $task = VolunteerTask::find($id);
+
+        if (!$task) {
+            return response()->json([
+                'code' => '404',
+                'success' => false,
+                'message' => 'المهمة غير موجودة'
+            ], 404);
+        }
+
+        try {
+            // تحديث حالة المهمة إلى مكتملة
+            $task->update([
+                'status' => 'مكتملة',
+                'completed_at' => now(),
+                'progress_percentage' => 100,
+                'awaiting_approval' => null, // إلغاء أي طلبات معلقة
+            ]);
+
+            // إذا كانت المهمة مرتبطة بطلب مساعدة، نحدث حالته أيضاً
+            if ($task->aidApplication) {
+                $task->aidApplication->update([
+                    'status' => 'completed',
+                    'completed_at' => now(),
+                ]);
+            }
+
+            // إذا كانت المهمة مرتبطة بزيارة، نحدث حالتها
+            if ($task->visit) {
+                $task->visit->update(['status' => 'مكتملة']);
+            }
+
+            return response()->json([
+                'code' => '200',
+                'success' => true,
+                'message' => 'تم إتمام المهمة بنجاح',
+                'data' => $task->fresh()
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'code' => '500',
+                'success' => false,
+                'message' => 'حدث خطأ أثناء إتمام المهمة',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+
 
 }
