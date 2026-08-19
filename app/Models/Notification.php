@@ -93,71 +93,76 @@ class Notification extends Model
     }
 
 
- public function sendPushNotification()
-{
-    $user = $this->user;
+    public function sendPushNotification()
+    {
+        $user = $this->user;
 
-    if (!$user || !$user->hasFcmToken()) {
-        return false;
-    }
+        if (!$user || !$user->hasFcmToken()) {
+            return false;
+        }
 
-    try {
-        $messaging = app(\Kreait\Firebase\Messaging::class);
+        try {
+            $messaging = app(\Kreait\Firebase\Messaging::class);
 
-        $message = CloudMessage::withTarget('token', $user->fcm_token)
-            ->withNotification(FirebaseNotification::create(
-                $this->title,
-                $this->body
-            ))
-            ->withAndroidConfig(
-                \Kreait\Firebase\Messaging\AndroidConfig::fromArray([
-                    'priority' => 'high',
-                    'notification' => [
-                        'channel_id' => 'high_importance_channel',
-                        'sound' => 'default',
-                        'priority' => 'high',
-                        'default_vibrate_timings' => true,
-                        'default_light_settings' => true,
-                    ],
-                ])
-            )
-            ->withApnsConfig(
-                \Kreait\Firebase\Messaging\ApnsConfig::fromArray([
-                    'payload' => [
-                        'aps' => [
-                            'sound' => 'default',
-                            'badge' => 1,
-                            'content-available' => true,
-                        ],
-                    ],
-                    'headers' => [
-                        'apns-priority' => '10',
-                    ],
-                ])
-            )
-            ->withData([
+            // ✅ تجميع كل البيانات في مصفوفة واحدة ليرسلها الـ Flutter
+            $dataPayload = [
                 'notification_id' => (string) $this->id,
                 'type' => $this->type,
+                'title' => $this->title,       // 👈 أضفنا العنوان داخل الداتا
+                'body' => $this->body,         // 👈 أضفنا النص داخل الداتا
                 'click_action' => $this->getClickAction(),
-                ...($this->data ?? [])
+                'payload' => json_encode($this->data ?? []), // 👈 أضفنا الـ payload الذي يطلبه الـ Flutter
+            ];
+
+            $message = CloudMessage::withTarget('token', $user->fcm_token)
+                ->withNotification(FirebaseNotification::create(
+                    $this->title,
+                    $this->body
+                ))
+                ->withAndroidConfig(
+                    \Kreait\Firebase\Messaging\AndroidConfig::fromArray([
+                        'priority' => 'high',
+                        'notification' => [
+                            'channel_id' => 'high_importance_channel',
+                            'sound' => 'default',
+                            'priority' => 'high',
+                            'default_vibrate_timings' => true,
+                            'default_light_settings' => true,
+                        ],
+                    ])
+                )
+                ->withApnsConfig(
+                    \Kreait\Firebase\Messaging\ApnsConfig::fromArray([
+                        'payload' => [
+                            'aps' => [
+                                'sound' => 'default',
+                                'badge' => 1,
+                                'content-available' => true,
+                            ],
+                        ],
+                        'headers' => [
+                            'apns-priority' => '10',
+                        ],
+                    ])
+                )
+                ->withData($dataPayload); // 👈 إرسال كل البيانات هنا
+
+            $messaging->send($message);
+
+            Log::info("Firebase push sent to user {$user->id}", [
+                'notification_id' => $this->id
             ]);
 
-        $messaging->send($message);
+            return true;
 
-        Log::info("Firebase push sent to user {$user->id}", [
-            'notification_id' => $this->id
-        ]);
-
-        return true;
-
-    } catch (\Exception $e) {
-        Log::error('Firebase push failed: ' . $e->getMessage(), [
-            'notification_id' => $this->id,
-            'user_id' => $user->id
-        ]);
-        return false;
+        } catch (\Exception $e) {
+            Log::error('Firebase push failed: ' . $e->getMessage(), [
+                'notification_id' => $this->id,
+                'user_id' => $user->id
+            ]);
+            return false;
+        }
     }
-}
 
     // ================================================================
     // ✅ دالة sendPushOnly (نفس السلوك الجديد: تخزين + Firebase)
