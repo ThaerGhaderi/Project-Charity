@@ -376,8 +376,11 @@ Route::post('/stripe/webhook', [DonationController::class, 'handleStripeWebhook'
     ->name('payerurl.webhook')
     ->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class);*/
 
+    Route::get('reports/dashboard-stats',[ReportController::class,'dasgboardStats']);
+
     // ✅ حل سحري لـ FrankenPHP: توجيه طلبات الـ Rewrite الإجبارية إلى دالة التسجيل مباشرة
 
+    
     Route::get('/campaigns/getAllForWebsite', [CampaignController::class,'getAllForWebsite']);
 
 

@@ -1,7 +1,10 @@
 <?php
 
 namespace App\Http\Controllers;
-
+use App\Models\User;
+use App\Models\Campaign;
+use App\Models\AidApplication;
+use App\Models\VolunteerTask;
 use App\Models\Donation;
 use App\Models\BeneficiaryProfile;
 use App\Models\VolunterProfile;
@@ -259,4 +262,74 @@ class ReportController extends Controller
             'volunteers'    => $list,
         ]);
     }
+
+    /**
+     * ✅ إحصائيات شاملة للوحة التحكم (Dashboard)
+     */
+    public function dashboardStats()
+    {
+        // 1. إحصائيات المتطوعين
+        $volunteersTotal = VolunterProfile::count();
+        $volunteersActive = VolunterProfile::whereIn('status', ['متاح', 'مشغول'])->count();
+        $volunteerHours = (int) VolunterProfile::sum('total_hours');
+
+        // 2. إحصائيات المستفيدين
+        $beneficiariesTotal = BeneficiaryProfile::count();
+        $beneficiariesActive = BeneficiaryProfile::where('status', 'مقبول')->count();
+
+        // 3. إحصائيات المتبرعين
+        $donorsTotal = User::where('role', 'Donor')->count();
+
+        // 4. إحصائيات التبرعات
+        $donationsTotalAmount = (float) Donation::where('status', 'completed')->sum('amount');
+        $donationsCount = Donation::where('status', 'completed')->count();
+
+        // 5. إحصائيات الحملات
+        $campaignsTotal = Campaign::count();
+        $campaignsActive = Campaign::whereIn('status', ['نشطة', 'active'])->count();
+
+        // 6. إحصائيات طلبات المساعدة
+        $requestsTotal = AidApplication::count();
+        $requestsPending = AidApplication::where('status', 'pending')->count();
+
+        // 7. إحصائيات مهام المتطوعين
+        $tasksTotal = VolunteerTask::count();
+        $tasksActive = VolunteerTask::whereNotIn('status', ['مكتملة', 'ملغية'])->count();
+
+        return response()->json([
+            'code' => '200',
+            'success' => true,
+            'data' => [
+                'volunteers' => [
+                    'total' => $volunteersTotal,
+                    'active' => $volunteersActive,
+                    'total_hours' => $volunteerHours,
+                ],
+                'beneficiaries' => [
+                    'total' => $beneficiariesTotal,
+                    'active' => $beneficiariesActive,
+                ],
+                'donors' => [
+                    'total' => $donorsTotal,
+                ],
+                'donations' => [
+                    'total_amount' => $donationsTotalAmount,
+                    'total_count' => $donationsCount,
+                ],
+                'campaigns' => [
+                    'total' => $campaignsTotal,
+                    'active' => $campaignsActive,
+                ],
+                'aid_requests' => [
+                    'total' => $requestsTotal,
+                    'pending' => $requestsPending,
+                ],
+                'volunteer_tasks' => [
+                    'total' => $tasksTotal,
+                    'active' => $tasksActive,
+                ],
+            ]
+        ], 200);
+    }
+
 }

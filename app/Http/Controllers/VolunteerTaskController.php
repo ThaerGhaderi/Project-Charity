@@ -387,7 +387,6 @@ class VolunteerTaskController extends Controller
         ], 200);
     }
 
-
     public function requestStartTask($id, Request $request)
     {
         $user = $request->user();
@@ -401,7 +400,6 @@ class VolunteerTaskController extends Controller
             ], 404);
         }
 
-
         $task = VolunteerTask::find($id);
 
         if (!$task) {
@@ -412,7 +410,6 @@ class VolunteerTaskController extends Controller
             ], 404);
         }
 
-
         if ($task->status !== 'جديدة') {
             return response()->json([
                 'code' => '400',
@@ -422,86 +419,50 @@ class VolunteerTaskController extends Controller
             ], 400);
         }
 
-
+        // إذا كانت المهمة مفتوحة، نربطها بالمتطوع الذي طلبها
         if (!$task->volunteer_id) {
             $task->update(['volunteer_id' => $volunteer->id]);
             $task->refresh();
         }
 
-
+        // التأكد أن المتطوع لا يطلب مهمة مسندة لغيره
         if ($task->volunteer_id != $volunteer->id) {
             return response()->json([
                 'code' => '403',
                 'success' => false,
                 'message' => 'هذه المهمة مأخوذة من قبل متطوع آخر',
-                'task_volunteer_id' => $task->volunteer_id,
             ], 403);
         }
 
-
-        $existingActiveCheckIn = VolunteerCheckIn::where('task_id', $task->id)
-            ->where('volunteer_id', $volunteer->id)
-            ->whereNull('check_out_time')
-            ->first();
-
-        if ($existingActiveCheckIn) {
-            return response()->json([
-                'code' => '400',
-                'success' => false,
-                'message' => 'لديك تسجيل حضور نشط لهذه المهمة بالفعل',
-                'check_in_time' => $existingActiveCheckIn->check_in_time->format('Y-m-d H:i:s'),
-            ], 400);
-        }
-
         try {
-            DB::beginTransaction();
-
-
-            $checkIn = VolunteerCheckIn::create([
-                'task_id' => $task->id,
-                'volunteer_id' => $volunteer->id,
-                'check_in_time' => now(),
-                'check_out_time' => null,
-                'status' => 'حاضر',
-                'location_verified' => true,
-                'latitude' => $request->latitude ?? null,
-                'longitude' => $request->longitude ?? null,
-                'notes' => $request->notes ?? 'بانتظار موافقة الأدمن',
-            ]);
-
-
+            // ✅ تحديث المهمة لتصبح "معلقة" بانتظار موافقة الأدمن
             $task->update([
                 'status' => 'معلقة',
-                'start_time' => now(),
+                'awaiting_approval' => 'start',
+                'requested_at' => now(),
+                'requested_latitude' => $request->latitude ?? null,
+                'requested_longitude' => $request->longitude ?? null,
             ]);
-
-            DB::commit();
 
             return response()->json([
                 'code' => '200',
                 'success' => true,
-                'message' => 'تم تسجيل الحضور بنجاح، المهمة معلقة بانتظار موافقة الأدمن',
+                'message' => 'تم إرسال طلب بدء المهمة، المهمة معلقة بانتظار موافقة الأدمن',
                 'data' => [
-                    'task' => $task,
-                    'check_in' => $checkIn,
-                    'status' => 'معلقة',
-                    'message_ar' => 'تم تسجيل حضورك، ينتظر الأدمن لتأكيد بدء المهمة',
-                    'assigned_to_you' => true,
+                    'task' => $task->fresh(),
+                    'pending_approval' => true,
                 ]
             ], 200);
 
         } catch (\Exception $e) {
-            DB::rollBack();
             return response()->json([
                 'code' => '500',
                 'success' => false,
-                'message' => 'حدث خطأ أثناء تسجيل الحضور',
+                'message' => 'حدث خطأ أثناء طلب بدء المهمة',
                 'error' => $e->getMessage(),
             ], 500);
         }
     }
-
-
     public function requestEndTask($id, Request $request)
     {
         $user = $request->user();
@@ -525,12 +486,11 @@ class VolunteerTaskController extends Controller
             ], 404);
         }
 
-
-        if (!in_array($task->status, ['قيد التنفيذ', 'معلقة'])) {
+        if ($task->status !== 'قيد التنفيذ') {
             return response()->json([
                 'code' => '400',
                 'success' => false,
-                'message' => 'لا يمكن طلب انصراف لمهمة ليست قيد التنفيذ أو معلقة',
+                'message' => 'لا يمكن طلب انصراف لمهمة ليست قيد التنفيذ',
                 'current_status' => $task->status,
             ], 400);
         }
@@ -543,63 +503,40 @@ class VolunteerTaskController extends Controller
             ], 403);
         }
 
-
-        $checkIn = VolunteerCheckIn::where('task_id', $task->id)
-            ->where('volunteer_id', $volunteer->id)
-            ->whereNull('check_out_time')
-            ->first();
-
-        if (!$checkIn) {
+        // التأكد من عدم وجود طلب إنهاء مسبق
+        if ($task->awaiting_approval === 'end') {
             return response()->json([
                 'code' => '400',
                 'success' => false,
-                'message' => 'لا يوجد تسجيل حضور نشط لهذه المهمة',
+                'message' => 'تم إرسال طلب إنهاء لهذه المهمة سابقًا وهو بانتظار المراجعة',
             ], 400);
         }
 
         try {
-            DB::beginTransaction();
-
-
-            $checkIn->update([
-                'check_out_time' => now(),
-                'status' => 'منصرف',
-                'notes' => $request->notes ?? 'بانتظار موافقة الأدمن',
-            ]);
-
-            // ✅ تحديث حالة المهمة إلى "معلقة" (بانتظار موافقة الأدمن)
+            // ✅ تحديث المهمة لتصبح "معلقة" بانتظار موافقة الأدمن على الإنهاء
             $task->update([
-                'status' => 'معلقة',
-                'end_time' => now(),
+                'awaiting_approval' => 'end',
+                'requested_at' => now(),
             ]);
-
-            DB::commit();
 
             return response()->json([
                 'code' => '200',
                 'success' => true,
-                'message' => 'تم تسجيل الانصراف بنجاح، المهمة معلقة بانتظار موافقة الأدمن',
+                'message' => 'تم إرسال طلب إنهاء المهمة، بانتظار مراجعة الإدارة',
                 'data' => [
-                    'task' => $task,
-                    'check_in' => $checkIn,
-                    'status' => 'معلقة',
-                    'message_ar' => 'تم تسجيل انصرافك، ينتظر الأدمن لتأكيد إكمال المهمة',
-                    'check_in_time' => $checkIn->check_in_time->format('Y-m-d H:i:s'),
-                    'check_out_time' => $checkIn->check_out_time->format('Y-m-d H:i:s'),
+                    'task' => $task->fresh(),
                 ]
             ], 200);
 
         } catch (\Exception $e) {
-            DB::rollBack();
             return response()->json([
                 'code' => '500',
                 'success' => false,
-                'message' => 'حدث خطأ أثناء تسجيل الانصراف',
+                'message' => 'حدث خطأ أثناء طلب إنهاء المهمة',
                 'error' => $e->getMessage(),
             ], 500);
         }
     }
-
 
 
     public function currentTask(Request $request)
@@ -1091,307 +1028,257 @@ class VolunteerTaskController extends Controller
             ],
         ], 200);
     }
-public function endTask($id, Request $request)
-    {
-        $user = $request->user();
-        $volunteer = $user->volunterProfile;
-        if (!$volunteer) {
-            return response()->json([
-                'code' => '404',
-                'success' => false,
-                'message' => 'لم يتم العثور على ملف المتطوع',
-            ], 404);
-        }
-
-        $task = VolunteerTask::find($id);
-
-        if (!$task) {
-            return response()->json([
-                'code' => '404',
-                'success' => false,
-                'message' => 'المهمة غير موجودة',
-            ], 404);
-        }
-
-        if ($task->status !== 'قيد التنفيذ') {
-            return response()->json([
-                'code' => '400',
-                'success' => false,
-                'message' => 'المهمة ليست قيد التنفيذ',
-            ], 400);
-        }
-
-        if ($task->awaiting_approval === 'end') {
-            return response()->json([
-                'code' => '400',
-                'success' => false,
-                'message' => 'تم إرسال طلب إنهاء لهذه المهمة سابقًا وهو بانتظار المراجعة',
-            ], 400);
-        }
-
-        $checkIn = VolunteerCheckIn::where('task_id', $task->id)
-            ->where('volunteer_id', $volunteer->id)
-            ->whereNull('check_out_time')
-            ->first();
-
-        if (!$checkIn) {
-            return response()->json([
-                'code' => '400',
-                'success' => false,
-                'message' => 'لا يوجد تسجيل حضور نشط لهذه المهمة',
-            ], 400);
-        }
-
-        $task->update([
-            'awaiting_approval' => 'end',
-            'requested_at' => now(),
-            'rejection_reason' => null,
-        ]);
-
+   public function endTask($id, Request $request)
+{
+    $user = $request->user();
+    $volunteer = $user->volunterProfile;
+    if (!$volunteer) {
         return response()->json([
-            'code' => '200',
-            'success' => true,
-            'message' => 'تم إرسال طلب إنهاء المهمة، بانتظار مراجعة الإدارة للتأكد من إنجازها',
-            'data' => [
-                'task' => $task->fresh(),
-            ],
-        ], 200);
+            'code' => '404',
+            'success' => false,
+            'message' => 'لم يتم العثور على ملف المتطوع',
+        ], 404);
     }
-public function reviewStartRequest($id, Request $request)
-    {
-        $validated = $request->validate([
-            'action' => 'required|in:accept,reject',
-            'rejection_reason' => 'required_if:action,reject|nullable|string|max:500',
+
+    $task = VolunteerTask::find($id);
+
+    if (!$task) {
+        return response()->json([
+            'code' => '404',
+            'success' => false,
+            'message' => 'المهمة غير موجودة',
+        ], 404);
+    }
+
+    if ($task->status !== 'قيد التنفيذ') {
+        return response()->json([
+            'code' => '400',
+            'success' => false,
+            'message' => 'المهمة ليست قيد التنفيذ',
+        ], 400);
+    }
+
+    if ($task->awaiting_approval === 'end') {
+        return response()->json([
+            'code' => '400',
+            'success' => false,
+            'message' => 'تم إرسال طلب إنهاء لهذه المهمة سابقًا وهو بانتظار المراجعة',
+        ], 400);
+    }
+
+    $checkIn = VolunteerCheckIn::where('task_id', $task->id)
+        ->where('volunteer_id', $volunteer->id)
+        ->whereNull('check_out_time')
+        ->first();
+
+    // ✅ إذا لم يوجد تسجيل حضور (لأن الأدمن أسند المهمة مباشرة)، ننشئ واحداً تلقائياً
+    if (!$checkIn) {
+        $checkIn = VolunteerCheckIn::create([
+            'task_id' => $task->id,
+            'volunteer_id' => $volunteer->id,
+            'check_in_time' => $task->start_time ?? now()->subHours(1),
+            'check_out_time' => null,
+            'status' => 'حاضر',
+            'location_verified' => true,
+            'notes' => 'تلقائي بواسطة النظام عند طلب الإنهاء',
         ]);
+    }
 
-        $task = VolunteerTask::with('volunteer.user')->find($id);
-        if (!$task) {
-            return response()->json([
-                'code' => '404',
-                'success' => false,
-                'message' => 'المهمة غير موجودة',
-            ], 404);
+    $task->update([
+        'awaiting_approval' => 'end',
+        'requested_at' => now(),
+        'rejection_reason' => null,
+    ]);
+
+    return response()->json([
+        'code' => '200',
+        'success' => true,
+        'message' => 'تم إرسال طلب إنهاء المهمة، بانتظار مراجعة الإدارة للتأكد من إنجازها',
+        'data' => [
+            'task' => $task->fresh(),
+        ],
+    ], 200);
+}
+public function reviewStartRequest($id, Request $request)
+{
+    $validated = $request->validate([
+        'action' => 'required|in:accept,reject',
+        'rejection_reason' => 'required_if:action,reject|nullable|string|max:500',
+    ]);
+
+    $task = VolunteerTask::with('volunteer.user')->find($id);
+    if (!$task) {
+        return response()->json(['code' => '404', 'success' => false, 'message' => 'المهمة غير موجودة'], 404);
+    }
+
+    if ($task->awaiting_approval !== 'start') {
+        return response()->json(['code' => '400', 'success' => false, 'message' => 'لا يوجد طلب بدء بانتظار المراجعة لهذه المهمة'], 400);
+    }
+
+    $volunteer = $task->volunteer;
+    $adminId = $request->user()->id ?? 1; // ✅ تسجيل الأدمن
+
+    if ($validated['action'] === 'accept') {
+        $result = $this->activateTask($task, $volunteer, $request, null);
+
+        if ($volunteer && $volunteer->user) {
+            Notification::sendPushOnly($volunteer->user->id, 'تم قبول طلبك', "تم قبول طلبك لبدء المهمة '{$task->title}'", 'task_start_approved', ['task_id' => $task->id]);
         }
 
-        if ($task->awaiting_approval !== 'start') {
-            return response()->json([
-                'code' => '400',
-                'success' => false,
-                'message' => 'لا يوجد طلب بدء بانتظار المراجعة لهذه المهمة',
-            ], 400);
-        }
+        return $result;
+    }
 
-        $volunteer = $task->volunteer;
+    // Reject
+    $task->update([
+        'status' => 'جديدة',
+        'volunteer_id' => null,
+        'awaiting_approval' => null,
+        'requested_at' => null,
+        'requested_latitude' => null,
+        'requested_longitude' => null,
+        'rejection_reason' => $validated['rejection_reason'] ?? null,
+        'reviewed_by' => $adminId, // ✅ تم الإصلاح
+        'reviewed_at' => now(),
+    ]);
 
-        if ($validated['action'] === 'accept') {
-            $result = $this->activateTask($task, $volunteer, $request, null);
+    if ($volunteer && $volunteer->user) {
+        Notification::sendPushOnly($volunteer->user->id, '❌ تم رفض طلبك', "تم رفض طلبك لبدء المهمة '{$task->title}'" . (!empty($validated['rejection_reason']) ? " - السبب: {$validated['rejection_reason']}" : ''), 'task_start_rejected', ['task_id' => $task->id]);
+    }
 
-            if ($volunteer && $volunteer->user) {
-                Notification::sendPushOnly(
-                    $volunteer->user->id,
-                    'تم قبول طلبك',
-                    "تم قبول طلبك لبدء المهمة '{$task->title}'",
-                    'task_start_approved',
-                    ['task_id' => $task->id]
-                );
-            }
+    return response()->json([
+        'code' => '200',
+        'success' => true,
+        'message' => 'تم رفض طلب بدء المهمة، وأصبحت متاحة للمتطوعين الآخرين',
+        'data' => ['task' => $task->fresh()],
+    ], 200);
+}
 
-            return $result;
-        }
+public function reviewEndRequest($id, Request $request)
+{
+    $validated = $request->validate([
+        'action' => 'required|in:accept,reject',
+        'rejection_reason' => 'required_if:action,reject|nullable|string|max:500',
+    ]);
+
+    $task = VolunteerTask::with('volunteer.user')->find($id);
+    if (!$task) {
+        return response()->json(['code' => '404', 'success' => false, 'message' => 'المهمة غير موجودة'], 404);
+    }
+
+    if ($task->awaiting_approval !== 'end') {
+        return response()->json(['code' => '400', 'success' => false, 'message' => 'لا يوجد طلب إنهاء بانتظار المراجعة لهذه المهمة'], 400);
+    }
+
+    $volunteer = $task->volunteer;
+    $adminId = $request->user()->id ?? 1; // ✅ تسجيل الأدمن
+
+    $checkIn = VolunteerCheckIn::where('task_id', $task->id)
+        ->where('volunteer_id', $task->volunteer_id)
+        ->whereNull('check_out_time')
+        ->first();
+
+    if (!$checkIn) {
+        return response()->json(['code' => '400', 'success' => false, 'message' => 'لا يوجد تسجيل حضور نشط لهذه المهمة'], 400);
+    }
+
+    if ($validated['action'] === 'reject') {
         $task->update([
-            'status' => 'جديدة',
-            'volunteer_id' => null,
             'awaiting_approval' => null,
             'requested_at' => null,
-            'requested_latitude' => null,
-            'requested_longitude' => null,
             'rejection_reason' => $validated['rejection_reason'] ?? null,
-            'reviewed_by' => null,
+            'reviewed_by' => $adminId, // ✅ تم الإصلاح
             'reviewed_at' => now(),
         ]);
 
         if ($volunteer && $volunteer->user) {
-            Notification::sendPushOnly(
-                $volunteer->user->id,
-                '❌ تم رفض طلبك',
-                "تم رفض طلبك لبدء المهمة '{$task->title}'" . (!empty($validated['rejection_reason']) ? " - السبب: {$validated['rejection_reason']}" : ''),
-                'task_start_rejected',
-                ['task_id' => $task->id]
-            );
+            Notification::sendPushOnly($volunteer->user->id, 'تم رفض طلب إنهاء المهمة', "لم تتم الموافقة على إنهاء المهمة '{$task->title}'، الرجاء متابعة العمل عليها", 'task_end_rejected', ['task_id' => $task->id]);
         }
 
         return response()->json([
             'code' => '200',
             'success' => true,
-            'message' => 'تم رفض طلب بدء المهمة، وأصبحت متاحة للمتطوعين الآخرين',
+            'message' => 'تم رفض طلب إنهاء المهمة، وبقيت قيد التنفيذ',
             'data' => ['task' => $task->fresh()],
         ], 200);
     }
-public function reviewEndRequest($id, Request $request)
-    {
-        $validated = $request->validate([
-            'action' => 'required|in:accept,reject',
-            'rejection_reason' => 'required_if:action,reject|nullable|string|max:500',
+
+    // Accept
+    try {
+        DB::beginTransaction();
+
+        $checkIn->update([
+            'check_out_time' => now(),
+            'status' => 'منصرف',
         ]);
 
-        $task = VolunteerTask::with('volunteer.user')->find($id);
-        if (!$task) {
-            return response()->json([
-                'code' => '404',
-                'success' => false,
-                'message' => 'المهمة غير موجودة',
-            ], 404);
+        $duration = $checkIn->check_in_time->diffInHours($checkIn->check_out_time);
+
+        $task->update([
+            'status' => 'مكتملة',
+            'end_time' => now(),
+            'completed_at' => now(),
+            'progress_percentage' => 100,
+            'awaiting_approval' => null,
+            'requested_at' => null,
+            'rejection_reason' => null,
+            'reviewed_by' => $adminId, // ✅ تم الإصلاح
+            'reviewed_at' => now(),
+        ]);
+
+        $volunteer->update([
+            'total_hours' => $volunteer->total_hours + $duration,
+            'status' => 'متاح' // ✅ المتطوع يعود متاح
+        ]);
+
+        VolunteerEvaluation::create([
+            'volunteer_id' => $volunteer->id,
+            'task_id' => $task->id,
+            'supervisor_id' => $adminId,
+            'rating' => null,
+            'feedback' => null,
+            'evaluated_at' => null,
+        ]);
+
+        if ($task->aidApplication) {
+            $task->aidApplication->update(['status' => 'completed', 'completed_at' => now()]);
         }
 
-        if ($task->awaiting_approval !== 'end') {
-            return response()->json([
-                'code' => '400',
-                'success' => false,
-                'message' => 'لا يوجد طلب إنهاء بانتظار المراجعة لهذه المهمة',
-            ], 400);
+        if ($task->visit) {
+            $task->visit->update(['status' => 'مكتملة']);
         }
 
-        $volunteer = $task->volunteer;
+        $this->updateCertificates($volunteer);
+        $this->updatePoints($volunteer, $duration);
 
-        $checkIn = VolunteerCheckIn::where('task_id', $task->id)
-            ->where('volunteer_id', $task->volunteer_id)
-            ->whereNull('check_out_time')
-            ->first();
-
-        if (!$checkIn) {
-            return response()->json([
-                'code' => '400',
-                'success' => false,
-                'message' => 'لا يوجد تسجيل حضور نشط لهذه المهمة',
-            ], 400);
+        if ($volunteer->user) {
+            Notification::sendPushOnly($volunteer->user->id, '✅ تم قبول إنهاء المهمة', "تمت الموافقة على إنهاء المهمة '{$task->title}' بنجاح", 'task_end_approved', ['task_id' => $task->id]);
         }
-        if ($validated['action'] === 'reject') {
-            $task->update([
-                'awaiting_approval' => null,
-                'requested_at' => null,
-                'rejection_reason' => $validated['rejection_reason'] ?? null,
-                'reviewed_by' => null,
-                'reviewed_at' => now(),
-            ]);
 
-            if ($volunteer && $volunteer->user) {
-                Notification::sendPushOnly(
-                    $volunteer->user->id,
-                    'تم رفض طلب إنهاء المهمة',
-                    "لم تتم الموافقة على إنهاء المهمة '{$task->title}'، الرجاء متابعة العمل عليها" . (!empty($validated['rejection_reason']) ? " - السبب: {$validated['rejection_reason']}" : ''),
-                    'task_end_rejected',
-                    ['task_id' => $task->id]
-                );
-            }
+        DB::commit();
 
-            return response()->json([
-                'code' => '200',
-                'success' => true,
-                'message' => 'تم رفض طلب إنهاء المهمة، وبقيت قيد التنفيذ',
-                'data' => ['task' => $task->fresh()],
-            ], 200);
-        }
-        try {
-            DB::beginTransaction();
+        return response()->json([
+            'code' => '200',
+            'success' => true,
+            'message' => 'تم قبول طلب الإنهاء، وتم إكمال المهمة بنجاح',
+            'data' => [
+                'task' => $task->fresh(),
+                'duration_hours' => round($duration, 2),
+            ],
+        ], 200);
 
-            $checkIn->update([
-                'check_out_time' => now(),
-                'status' => 'منصرف',
-            ]);
-
-            $duration = $checkIn->check_in_time->diffInHours($checkIn->check_out_time);
-
-            $task->update([
-                'status' => 'مكتملة',
-                'end_time' => now(),
-                'completed_at' => now(),
-                'progress_percentage' => 100,
-                'awaiting_approval' => null,
-                'requested_at' => null,
-                'rejection_reason' => null,
-                'reviewed_by' => null,
-                'reviewed_at' => now(),
-            ]);
-
-            $volunteer->update([
-                'total_hours' => $volunteer->total_hours + $duration,
-            ]);
-
-            VolunteerEvaluation::create([
-                'volunteer_id' => $volunteer->id,
-                'task_id' => $task->id,
-                'supervisor_id' => $task->supervisor_id,
-                'rating' => null,
-                'feedback' => null,
-                'evaluated_at' => null,
-            ]);
-
-            if ($task->aidApplication) {
-                $task->aidApplication->update([
-                    'status' => 'completed',
-                    'completed_at' => now(),
-                ]);
-                Notification::sendPushOnly(
-                    $task->aidApplication->user_id,
-                    'تم إكمال طلب المساعدة',
-                    "تم إكمال طلب المساعدة '{$task->title}' بواسطة المتطوع {$volunteer->user->name}",
-                    'aid_completed',
-                    ['application_id' => $task->aidApplication->id]
-                );
-            }
-
-
-            if ($task->visit) {
-                $task->visit->update(['status' => 'مكتملة']);
-            }
-
-            $this->updateCertificates($volunteer);
-            $this->updatePoints($volunteer, $duration);
-
-            if ($task->beneficiary_id) {
-                Notification::sendPushOnly(
-                    $task->beneficiary_id,
-                    'تم إكمال المهمة',
-                    "تم إكمال المهمة '{$task->title}' بواسطة المتطوع {$volunteer->user->name}",
-                    'task_completed',
-                    ['task_id' => $task->id]
-                );
-            }
-
-            if ($volunteer->user) {
-                Notification::sendPushOnly(
-                    $volunteer->user->id,
-                    '✅ تم قبول إنهاء المهمة',
-                    "تمت الموافقة على إنهاء المهمة '{$task->title}' بنجاح",
-                    'task_end_approved',
-                    ['task_id' => $task->id]
-                );
-            }
-
-            DB::commit();
-
-            return response()->json([
-                'code' => '200',
-                'success' => true,
-                'message' => 'تم قبول طلب الإنهاء، وتم إكمال المهمة بنجاح',
-                'data' => [
-                    'task' => $task->fresh(),
-                    'check_in' => $checkIn,
-                    'duration_hours' => round($duration, 2),
-                    'total_hours' => $volunteer->total_hours,
-                ],
-            ], 200);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json([
-                'code' => '500',
-                'success' => false,
-                'message' => 'حدث خطأ أثناء قبول إنهاء المهمة',
-                'error' => $e->getMessage(),
-            ], 500);
-        }
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return response()->json([
+            'code' => '500',
+            'success' => false,
+            'message' => 'حدث خطأ أثناء قبول إنهاء المهمة',
+            'error' => $e->getMessage(),
+        ], 500);
     }
+}
+
+
+
 public function pendingApprovals(Request $request)
     {
         $query = VolunteerTask::whereNotNull('awaiting_approval')
