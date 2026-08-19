@@ -50,7 +50,7 @@ return [
              *
              */
 
-              'credentials' => str_starts_with(trim(env('FIREBASE_CREDENTIALS', '')), '{') ? json_decode(env('FIREBASE_CREDENTIALS'), true) : env('FIREBASE_CREDENTIALS'),
+                     'credentials' => env('FIREBASE_CREDENTIALS'),
              'project_id' => env('FIREBASE_PROJECT_ID'), 
 
             /*
