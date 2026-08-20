@@ -932,10 +932,11 @@ public function handleStripeWebhook(Request $request)
      */
     public function createGiftStripePayment(Request $request)
     {
-        $request->validate([
+           $request->validate([
             'campaign_id' => 'required|exists:campaigns,id',
             'amount' => 'required|numeric|min:1',
-            'on_behalf_of' => 'required|string|max:255', // اسم المهدى إليه
+            'on_behalf_of' => 'required|string|max:255',
+            'recipient_email' => 'required|email|max:255', // 👈 أضفنا التحقق من البريد
             'gift_message' => 'nullable|string|max:500',
         ]);
 
@@ -952,8 +953,9 @@ public function handleStripeWebhook(Request $request)
                 'payment_method' => 'stripe',
                 'payment_gateway' => 'stripe',
                 'status' => 'pending',
-                'is_gift' => true, // تبرع إهدائي
+                'is_gift' => true,
                 'on_behalf_of' => $request->on_behalf_of,
+                'recipient_email' => $request->recipient_email, // 👈 نحفظ البريد هنا
                 'gift_message' => $request->gift_message,
                 'donated_at' => now()
             ]);

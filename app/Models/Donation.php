@@ -20,6 +20,7 @@ class Donation extends Model
         'is_anonymous',
         'is_recurring',
         'is_gift',
+     'recipient_email', // 👈 أضف هذا السطر
         'on_behalf_of',
         'gift_message',
         'receipt_url',
