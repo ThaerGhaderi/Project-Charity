@@ -115,7 +115,7 @@ public function store(GiftDonationRequest $request)
     /**
      * Get gift donations for user
      */
-       public function index(Request $request)
+           public function index(Request $request)
     {
         $user = $request->user();
         $donor = $user->donor;
@@ -127,7 +127,7 @@ public function store(GiftDonationRequest $request)
             ], 404);
         }
 
-        // جلب جميع الهدايا الخاصة بهذا المتبرع
+        // ✅ جلب التبرعات الإهدائية من جدول donations حيث is_gift = true
         $gifts = Donation::where('donor_id', $donor->id)
                         ->where('is_gift', true)
                         ->with('campaign')
