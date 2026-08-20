@@ -147,41 +147,56 @@ public function export()
             'status' => 'sometimes|in:pending,completed,failed,refunded,cancelled',
         ]);
 
-        // 5. نتحقق إذا كان الأدمن يغير الحالة إلى "مكتمل" (وليست مكتملة مسبقاً)
-        if (isset($validated['status']) && $validated['status'] === 'completed' && $record->status !== 'completed') {
-            
-            $amount = $record->amount;
-            $userId = null;
-            $donorName = 'المتبرع';
+        // 5. تحضير بيانات المتبرع لإرسال الإشعار
+        $userId = null;
+        $donorName = 'المتبرع';
 
-            // ✅ استخراج الـ user_id والاسم بناءً على نوع الجدول
-            if ($record instanceof \App\Models\Donation && $record->donor && $record->donor->user) {
-                $userId = $record->donor->user->id;
-                $donorName = $record->donor->user->name;
-            } elseif ($record instanceof \App\Models\Doration && $record->donorProfile && $record->donorProfile->user) {
-                $userId = $record->donorProfile->user->id;
-                $donorName = $record->donorProfile->user->name;
+        if ($record instanceof \App\Models\Donation && $record->donor && $record->donor->user) {
+            $userId = $record->donor->user->id;
+            $donorName = $record->donor->user->name;
+        } elseif ($record instanceof \App\Models\Doration && $record->donorProfile && $record->donorProfile->user) {
+            $userId = $record->donorProfile->user->id;
+            $donorName = $record->donorProfile->user->name;
+        }
+
+        // 6. إرسال الإشعارات بناءً على الحالة الجديدة (إذا كانت الحالة تتغير فعلياً)
+        $newStatus = $validated['status'] ?? null;
+
+        if ($newStatus && $newStatus !== $record->status) {
+
+            // ✅ إشعار التأكيد (مكتمل)
+            if ($newStatus === 'completed') {
+                if ($userId) {
+                    \App\Models\Notification::sendPushOnly(
+                        $userId,
+                        'تم تأكيد تبرعك ✅',
+                        "تم تأكيد تبرعك بقيمة {$record->amount} من قبل إدارة الجمعية. شكراً لكرمك يا {$donorName}!",
+                        'donation',
+                        ['donation_id' => $record->id]
+                    );
+                }
             }
-
-            // ✅ إرسال إشعار للمتبرع بتأكيد التبرع
-            if ($userId) {
-                \App\Models\Notification::sendPushOnly(
-                    $userId,
-                    'تم تأكيد تبرعك ✅',
-                    "تم تأكيد تبرعك بقيمة {$amount} من قبل إدارة الجمعية. شكراً لكرمك يا {$donorName}!",
-                    'donation',
-                    ['donation_id' => $record->id]
-                );
+            // ✅ إشعار الرفض (ملغي)
+            elseif ($newStatus === 'cancelled') {
+                if ($userId) {
+                    \App\Models\Notification::sendPushOnly(
+                        $userId,
+                        'تم إلغاء تبرعك ❌',
+                        "نأسف لإعلامك بأنه تم إلغاء تبرعك من قبل إدارة الجمعية. لأي استفسار يرجى التواصل معنا.",
+                        'donation',
+                        ['donation_id' => $record->id]
+                    );
+                }
             }
         }
 
-        // 6. نحدث الحالة فقط لا غير
+        // 7. نحدث الحالة فقط لا غير
         if (isset($validated['status'])) {
             $record->status = $validated['status'];
             $record->save();
         }
 
-        // 7. نرجع البيانات للرياكت
+        // 8. نرجع البيانات للرياكت
         return response()->json([
             'status' => true,
             'message' => 'تم تحديث حالة التبرع بنجاح',
