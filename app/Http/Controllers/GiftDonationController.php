@@ -142,10 +142,10 @@ public function store(GiftDonationRequest $request)
     /**
      * Get gift details
      */
-    public function show($id, Request $request)
+      public function show($id, Request $request)
     {
         $user = $request->user();
-        $donor = $user->donor;  // ✅ جلب ملف المتبرع
+        $donor = $user->donor;
 
         if (!$donor) {
             return response()->json([
@@ -154,16 +154,23 @@ public function store(GiftDonationRequest $request)
             ], 404);
         }
 
-        $gift = GiftDonation::with(['donation.campaign'])
-            ->whereHas('donation', function($q) use ($donor) {
-                $q->where('donor_id', $donor->id);  // ✅ استخدام donor_id
-            })
-            ->where('id', $id)
-            ->firstOrFail();
+        // ✅ البحث في جدول التبرعات الأساسي حيث التبرع الإهدائي
+        $donation = Donation::where('id', $id)
+                        ->where('donor_id', $donor->id)
+                        ->where('is_gift', true)
+                        ->with('campaign')
+                        ->first();
+
+        if (!$donation) {
+            return response()->json([
+                'success' => false,
+                'message' => 'التبرع الإهدائي غير موجود'
+            ], 404);
+        }
 
         return response()->json([
             'success' => true,
-            'data' => $gift
+            'data' => $donation
         ], 200);
     }
 }
