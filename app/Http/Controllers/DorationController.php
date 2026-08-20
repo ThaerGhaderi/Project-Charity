@@ -17,19 +17,22 @@ class DorationController extends Controller
     /**
      * Display a listing of the resource.
      */
+// public function export()
+// {
+//     // 1. توليد وحفظ ملف الإكسل داخل مجلد التخزين العام
+//     Excel::store(new DonationExport, 'Donation.xlsx', 'public');
+
+//     // 2. إرجاع رسالة النجاح مع رابط التحميل البرمجي الآمن الجديد
+//     return response()->json([
+//         'message' => 'تم حفظ الملف بنجاح في السيرفر',
+//         'file_url' => url('/download-donation') // التعديل هنا
+//     ]);
+// }
+
 public function export()
 {
-    // 1. توليد وحفظ ملف الإكسل داخل مجلد التخزين العام
-    Excel::store(new DonationExport, 'Donation.xlsx', 'public');
-
-    // 2. إرجاع رسالة النجاح مع رابط التحميل البرمجي الآمن الجديد
-    return response()->json([
-        'message' => 'تم حفظ الملف بنجاح في السيرفر',
-        'file_url' => url('/download-donation') // التعديل هنا
-    ]);
+    return Excel::download(new DonationExport, 'Donation.xlsx', \Maatwebsite\Excel\Excel::XLSX);
 }
-
-
     public function index()
     {
         $dorations = Doration::with('donorProfile.user')->latest()->get();

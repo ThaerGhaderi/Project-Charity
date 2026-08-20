@@ -167,8 +167,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/donations/stripe', [DonationController::class, 'createStripePayment']); //!دفع عبر stripe
         // Route::post('/donations/stripe/confirm', [DonationController::class, 'confirmStripePayment']);
     });
-    // ==================== VOLUNTEER ROUTES ====================
-    Route::prefix('volunteer')->group(function () {
+     // ==================== VOLUNTEER ROUTES ====================
+      Route::prefix('volunteer')->group(function () {
         Route::post('/complete-profile', [ControllersVolunterProfileController::class, 'completeProfile']); //!اكمال الملف الشخصي
         Route::get('/profile', [ControllersVolunterProfileController::class, 'getVolunteers']);
          Route::put('/profile/{id}', [ControllersVolunterProfileController::class, 'update']); //!جلب الملف الشخصي
