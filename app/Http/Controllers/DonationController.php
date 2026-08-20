@@ -850,7 +850,7 @@ public function handleStripeWebhook(Request $request)
     //     return response()->json($dorations);
     // }
 
-    public function indexForAdmin()
+      public function indexForAdmin()
     {
         // 1. جلب التبرعات من جدول Donations
         $donations = Donation::with(['donor.user', 'campaign'])->latest()->get();
@@ -858,8 +858,13 @@ public function handleStripeWebhook(Request $request)
         // 2. جلب التبرعات من جدول Dorations
         $dorations = Doration::with(['donorProfile.user'])->latest()->get();
 
-        // 3. دمج النتيجتين في مصفوفة واحدة
+        // 3. دمج النتيجتين في مجموعة واحدة
         $allDonations = $donations->concat($dorations);
+
+        // 4. ✅ ترتيب كل التبرعات معاً من الأحدث للأقدم بناءً على تاريخ الإنشاء
+        $allDonations = $allDonations->sortByDesc(function ($item) {
+            return $item->created_at;
+        })->values(); // values() لإعادة ترتيب المفاتيح من 0
 
         return response()->json($allDonations);
     }
