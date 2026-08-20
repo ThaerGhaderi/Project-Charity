@@ -9,6 +9,7 @@ use App\Http\Requests\Donor\DonationRequest;
 use App\Models\Donation;
 use App\Models\Campaign;
 use App\Models\DonorProfile;
+use App\Models\Doration;
 use App\Models\PaymentTransaction;
 use App\Models\Notification;
 use App\Services\PayerurlService;
@@ -843,13 +844,25 @@ public function handleStripeWebhook(Request $request)
 
         return $statuses[$status] ?? $status;
     }
+    // public function indexForAdmin()
+    // {
+    //     $dorations = Donation::with('donor.user','campaign')->latest()->get();
+    //     return response()->json($dorations);
+    // }
+
     public function indexForAdmin()
     {
-        $dorations = Donation::with('donor.user','campaign')->latest()->get();
-        return response()->json($dorations);
+        // 1. جلب التبرعات من جدول Donations
+        $donations = Donation::with(['donor.user', 'campaign'])->latest()->get();
+
+        // 2. جلب التبرعات من جدول Dorations
+        $dorations = Doration::with(['donorProfile.user'])->latest()->get();
+
+        // 3. دمج النتيجتين في مصفوفة واحدة
+        $allDonations = $donations->concat($dorations);
+
+        return response()->json($allDonations);
     }
-
-
     /**
      * 1. تبرع حر (Free Donation) - دفع لمرة واحدة
      */
