@@ -972,6 +972,9 @@ public function handleStripeWebhook(Request $request)
     /**
      * 3. تبرع دوري (Recurring Donation) - اشتراك شهري
      */
+       /**
+     * 3. تبرع دوري (Recurring Donation) - اشتراك شهري
+     */
     public function createRecurringStripePayment(Request $request)
     {
         $request->validate([
@@ -979,8 +982,24 @@ public function handleStripeWebhook(Request $request)
             'amount' => 'required|numeric|min:1', // المبلغ الشهري
         ]);
 
-        $user = $request->user();
+        // ✅ جلب المستخدم مباشرة عن طريق الـ Token
+        $user = auth()->user();
+
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'التوكن غير صالح أو غير موجود. يجب تسجيل الدخول.'
+            ], 401);
+        }
+
         $donor = $user->donor;
+        if (!$donor) {
+            return response()->json([
+                'success' => false,
+                'message' => 'هذا المستخدم لا يملك ملف متبرع (Donor Profile).'
+            ], 404);
+        }
+
         $campaign = Campaign::findOrFail($request->campaign_id);
 
         try {
@@ -1027,10 +1046,9 @@ public function handleStripeWebhook(Request $request)
             ], 201);
 
         } catch (\Exception $e) {
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+            return response()->json([
+                'success' => false,
+                'message' => 'حدث خطأ أثناء إنشاء الاشتراك: ' . $e->getMessage()
+            ], 500);
         }
-    }
-
-
-
-    }
+    }}
