@@ -500,4 +500,21 @@ public function update(Request $request, $id)
         ], 500);
     }
 }
+public function getVolunteersList(Request $request)
+    {
+        $user = $request->user();
+
+        $volunteers = User::where('role', 'volunteer')
+            ->where('id', '!=', $user->id)
+            ->where('is_active', true)
+            ->with('volunterProfile')
+            ->get(['id', 'name', 'email', 'role', 'is_active']);
+
+        return response()->json([
+            'code' => '200',
+            'success' => true,
+            'data' => $volunteers
+        ], 200);
+    }
+
 }

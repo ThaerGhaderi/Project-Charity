@@ -119,40 +119,47 @@ class BeneficiaryProfileController extends Controller
         }
     }
 
-    public function getProfile(Request $request)
-    {
-        $user = $request->user();
+   public function getProfile(Request $request)
+{
+    $user = $request->user();
 
-        if (!$user->beneficiary) {
-            return response()->json([
-                'code' => '404',
-                'success' => false,
-                'message' => 'Beneficiary profile not found.'
-            ], 404);
-        }
-        $profileData = $user->beneficiary->toArray();
-
-        // ✅ من الملف الثاني: استخدام beneficiary->is_anonymized
-        if ($user->beneficiary->is_anonymized) {
-            unset($profileData['address']);
-            unset($profileData['birth_date']);
-            $profileData['name_anonymized'] = 'Confidential';
-        }
-
+    if (!$user->beneficiary) {
         return response()->json([
-            'code' => '200',
-            'success' => true,
-            'data' => [
-                'user' => [
-                    'id' => $user->id,
-                    'name' => $user->beneficiary->is_anonymized ? 'Anonymous' : $user->name,
-                    'email' => $user->email,
-                    'role' => $user->role
-                ],
-                'profile' => $profileData
-            ]
-        ]);
+            'code' => '404',
+            'success' => false,
+            'message' => 'Beneficiary profile not found.'
+        ], 404);
     }
+
+    $profileData = $user->beneficiary->toArray();
+
+    if ($user->beneficiary->is_anonymized) {
+        unset($profileData['address']);
+        unset($profileData['birth_date']);
+        $profileData['name_anonymized'] = 'Confidential';
+    }
+
+    return response()->json([
+        'code' => '200',
+        'success' => true,
+        'data' => [
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->beneficiary->is_anonymized ? 'Anonymous' : $user->name,
+                'email' => $user->email,
+                'role' => $user->role
+            ],
+            'profile' => $profileData,
+            'general_profile' => $user->profile ? [
+                'phone' => $user->profile->phone,
+                'city_id' => $user->profile->city_id,
+                'city_name' => $user->profile->city?->name,
+                'birth_date' => $user->profile->birth_date,
+                'gender' => $user->profile->gender,
+            ] : null,
+        ]
+    ]);
+}
 
     /**
      * ✅ من الملف الثاني: تحديث الملف الشخصي

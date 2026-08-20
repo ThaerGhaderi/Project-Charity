@@ -120,7 +120,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/donations/{id}/receipt', [DonationController::class, 'receipt']); //!جلب إيصال التبرع
         Route::get('/donations/{id}', [DonationController::class, 'show']); //!جلب تفاصيل تبرع معين
         Route::get('/donations/{id}/pdf', [DonationController::class, 'downloadReceiptPdf']); //!تحميل إيصال التبرع بصيغة PDF
-
+        Route::post('/donations/stripe/free', [DonationController::class, 'createFreeStripePayment']);
+        Route::post('/donations/stripe/gift', [DonationController::class, 'createGiftStripePayment']);
+        Route::post('/donations/stripe/recurring', [DonationController::class, 'createRecurringStripePayment']);
         // ✅ PayerURL Routes (جديدة)
         // Route::post('/donations/payerurl', [DonationController::class, 'createPayerurlPayment']);
         // Route::get('/donations/{id}/qr', [DonationController::class, 'getDonationQR']);
@@ -297,6 +299,7 @@ Route::post('/volunteers', [ControllersVolunterProfileController::class, 'store'
 Route::delete('/volunteers/{id}', [ControllersVolunterProfileController::class, 'destroy']);
 Route::patch('/volunteers/{id}/status', [ControllersVolunterProfileController::class, 'updateStatus']);
 Route::get('/volunteers/{id}', [ControllersVolunterProfileController::class, 'show']);
+Route::get('/volunteers-list', [ControllersVolunterProfileController::class, 'getVolunteersList']);
 
 
 
@@ -304,7 +307,6 @@ Route::post('/volunteer-tasks', [VolunteerTaskController::class, 'store']);
 Route::post('/volunteer-tasks/{task}/assign', [VolunteerTaskController::class, 'assign']);
 Route::get('volunteer-tasks/pending-evaluation', [VolunteerTaskController::class, 'pendingEvaluation']);
 Route::post('volunteer-tasks/{id}/evaluate', [VolunteerTaskController::class, 'evaluate']);
-
 
 
 Route::post('/admin/volunteer-tasks/{id}/review-start', [VolunteerTaskController::class, 'reviewStartRequest']);
@@ -383,13 +385,11 @@ Route::post('/stripe/webhook', [DonationController::class, 'handleStripeWebhook'
     ->name('payerurl.webhook')
     ->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class);*/
 
-    Route::get('reports/dashboard-stats',[ReportController::class,'dasgboardStats']);
-    Route::get('/campaigns/show/{id}', [CampaignController::class, 'showCampaignForWebsite']);
+Route::get('reports/dashboard-stats',[ReportController::class,'dasgboardStats']);
+Route::get('/campaigns/show/{id}', [CampaignController::class, 'showCampaignForWebsite']);
 
 
-Route::post('/donations/stripe/free', [DonationController::class, 'createFreeStripePayment']);
-Route::post('/donations/stripe/gift', [DonationController::class, 'createGiftStripePayment']);
-Route::post('/donations/stripe/recurring', [DonationController::class, 'createRecurringStripePayment']);
+
 
     // ✅ حل سحري لـ FrankenPHP: توجيه طلبات الـ Rewrite الإجبارية إلى دالة التسجيل مباشرة
 
