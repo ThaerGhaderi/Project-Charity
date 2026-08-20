@@ -124,42 +124,71 @@ public function export()
         //
     }
 
-public function update(Request $request, $id)
-{
-    // 1. نبحث في موديل Donation أولاً
-    $record = Donation::find($id);
-    
-    // 2. إذا لم نجده، نبحث في موديل Doration
-    if (!$record) {
-        $record = Doration::find($id);
-    }
+    public function update(Request $request, $id)
+    {
+        // 1. نبحث في موديل Donation أولاً
+        $record = Donation::find($id);
 
-    // 3. إذا لم نجده في كليهما، نرجع خطأ 404
-    if (!$record) {
+        // 2. إذا لم نجده، نبحث في موديل Doration
+        if (!$record) {
+            $record = Doration::find($id);
+        }
+
+        // 3. إذا لم نجده في كليهما، نرجع خطأ 404
+        if (!$record) {
+            return response()->json([
+                'status' => false,
+                'message' => 'التبرع غير موجود'
+            ], 404);
+        }
+
+        // 4. نتأكد إن الحالة المرسلة موجودة ضمن الخيارات الإنجليزية المسموح بها
+        $validated = $request->validate([
+            'status' => 'sometimes|in:pending,completed,failed,refunded,cancelled',
+        ]);
+
+        // 5. نتحقق إذا كان الأدمن يغير الحالة إلى "مكتمل" (وليست مكتملة مسبقاً)
+        if (isset($validated['status']) && $validated['status'] === 'completed' && $record->status !== 'completed') {
+            
+            $amount = $record->amount;
+            $userId = null;
+            $donorName = 'المتبرع';
+
+            // ✅ استخراج الـ user_id والاسم بناءً على نوع الجدول
+            if ($record instanceof \App\Models\Donation && $record->donor && $record->donor->user) {
+                $userId = $record->donor->user->id;
+                $donorName = $record->donor->user->name;
+            } elseif ($record instanceof \App\Models\Doration && $record->donorProfile && $record->donorProfile->user) {
+                $userId = $record->donorProfile->user->id;
+                $donorName = $record->donorProfile->user->name;
+            }
+
+            // ✅ إرسال إشعار للمتبرع بتأكيد التبرع
+            if ($userId) {
+                \App\Models\Notification::sendPushOnly(
+                    $userId,
+                    'تم تأكيد تبرعك ✅',
+                    "تم تأكيد تبرعك بقيمة {$amount} من قبل إدارة الجمعية. شكراً لكرمك يا {$donorName}!",
+                    'donation',
+                    ['donation_id' => $record->id]
+                );
+            }
+        }
+
+        // 6. نحدث الحالة فقط لا غير
+        if (isset($validated['status'])) {
+            $record->status = $validated['status'];
+            $record->save();
+        }
+
+        // 7. نرجع البيانات للرياكت
         return response()->json([
-            'status' => false,
-            'message' => 'التبرع غير موجود'
-        ], 404);
+            'status' => true,
+            'message' => 'تم تحديث حالة التبرع بنجاح',
+            'data' => $record
+        ]);
     }
 
-    // 4. نتأكد إن الحالة المرسلة موجودة ضمن الخيارات الإنجليزية المسموح بها
-    $validated = $request->validate([
-        'status' => 'sometimes|in:pending,completed,failed,refunded,cancelled',
-    ]);
-
-    // 5. نحدث الحالة فقط لا غير
-    if (isset($validated['status'])) {
-        $record->status = $validated['status'];
-        $record->save();
-    }
-
-    // 6. نرجع البيانات للرياكت
-    return response()->json([
-        'status' => true,
-        'message' => 'تم تحديث حالة التبرع بنجاح',
-        'data' => $record
-    ]);
-}
     /**
      * Remove the specified resource from storage.
      */
