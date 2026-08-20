@@ -16,10 +16,9 @@ use App\Services\PayerurlService;
 use App\Services\StripeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Mpdf\Mpdf;
-
+use Illuminate\Support\Facades\Log;
 class DonationController extends Controller
 {
     protected $payerurlService;
@@ -554,6 +553,10 @@ public function handleStripeWebhook(Request $request)
      * API: Check payment status
      * GET /api/donor/payments/{donation}/status
      */
+       /**
+     * API: Check payment status
+     * GET /api/donor/payments/{donation}/status
+     */
     public function checkPaymentStatus($donationId, Request $request)
     {
         $user = $request->user();
@@ -570,28 +573,95 @@ public function handleStripeWebhook(Request $request)
             ->where('id', $donationId)
             ->firstOrFail();
 
-        $status = 'pending';
         $message = 'جاري معالجة الدفع';
 
+        // إذا كان التبرع مكتمل بالفعل، لا داعي لفحصه مرة أخرى
+        if ($donation->status === 'completed') {
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'donation_id' => $donation->id,
+                    'status' => $donation->status,
+                    'gateway_status' => $donation->gateway_status,
+                    'amount' => $donation->amount,
+                    'currency' => $donation->currency,
+                    'message' => 'تم الدفع بنجاح مسبقاً'
+                ]
+            ], 200);
+        }
+
         if ($donation->gateway_payment_id) {
-            $paymentStatus = $this->payerurlService->getPaymentStatus($donation->gateway_payment_id);
 
-            if ($paymentStatus['success']) {
-                $status = $paymentStatus['status'];
+            // ✅ التحقق من دفع Stripe
+            if ($donation->payment_gateway === 'stripe') {
+                try {
+                    $stripe = new \Stripe\StripeClient(config('services.stripe.secret'));
+                    $session = $stripe->checkout->sessions->retrieve($donation->gateway_payment_id);
 
-                if ($status === 'completed') {
-                    $donation->update([
-                        'status' => 'completed',
-                        'gateway_status' => 'completed'
-                    ]);
-                    $donation->campaign->updateCollectedAmount();
-                    $message = 'تم الدفع بنجاح';
-                } elseif ($status === 'failed' || $status === 'cancelled') {
-                    $donation->update([
-                        'status' => 'failed',
-                        'gateway_status' => $status
-                    ]);
-                    $message = 'فشل الدفع';
+                    if ($session->payment_status === 'paid') {
+                        $donation->update([
+                            'status' => 'completed',
+                            'gateway_status' => 'paid'
+                        ]);
+                        $donation->campaign->updateCollectedAmount();
+
+                        if ($donation->donor) {
+                            $donation->donor->addDonation($donation->amount);
+                        }
+
+                        // ✅ إرسال الإشعار عند التأكد من نجاح الدفع
+                        if ($donation->donor && $donation->donor->user) {
+                            Notification::sendPushOnly(
+                                $donation->donor->user->id,
+                                'تبرع ناجح 🎉',
+                                "تم تبرعك بقيمة {$donation->amount} {$donation->currency} لحملة {$donation->campaign->title} بنجاح. شكراً لك!",
+                                'donation',
+                                ['donation_id' => $donation->id]
+                            );
+                        }
+                        $message = 'تم الدفع بنجاح';
+                    }
+                } catch (\Exception $e) {
+                    Log::error("Stripe Status Check Failed: " . $e->getMessage());
+                }
+            }
+
+            // ✅ التحقق من دفع PayerURL
+            elseif ($donation->payment_gateway === 'payerurl') {
+                $paymentStatus = $this->payerurlService->getPaymentStatus($donation->gateway_payment_id);
+
+                if ($paymentStatus['success']) {
+                    $status = $paymentStatus['status'];
+
+                    if ($status === 'completed') {
+                        $donation->update([
+                            'status' => 'completed',
+                            'gateway_status' => 'completed'
+                        ]);
+                        $donation->campaign->updateCollectedAmount();
+
+                        if ($donation->donor) {
+                            $donation->donor->addDonation($donation->amount);
+                        }
+
+                        // ✅ إرسال الإشعار عند التأكد من نجاح الدفع
+                        if ($donation->donor && $donation->donor->user) {
+                            Notification::sendPushOnly(
+                                $donation->donor->user->id,
+                                'تبرع ناجح 🎉',
+                                "تم تبرعك بقيمة {$donation->amount} {$donation->currency} لحملة {$donation->campaign->title} بنجاح. شكراً لك!",
+                                'donation',
+                                ['donation_id' => $donation->id]
+                            );
+                        }
+                        $message = 'تم الدفع بنجاح';
+                    } elseif ($status === 'failed' || $status === 'cancelled') {
+                        $donation->update([
+                            'status' => 'failed',
+                            'gateway_status' => $status
+                        ]);
+                        $message = 'فشل الدفع';
+                    }
                 }
             }
         }
@@ -608,7 +678,6 @@ public function handleStripeWebhook(Request $request)
             ]
         ], 200);
     }
-
     /**
      * Get donation receipt
      * GET /api/donor/donations/{id}/receipt
