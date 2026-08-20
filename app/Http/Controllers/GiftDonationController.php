@@ -10,6 +10,8 @@ use App\Models\PaymentTransaction;
 use App\Models\GiftDonation;
 use App\Http\Requests\GiftDonationRequest;
 
+use Illuminate\Http\Request as HttpRequest;
+use Illuminate\Http\Request;
 class GiftDonationController extends Controller
 {
 
@@ -113,10 +115,10 @@ public function store(GiftDonationRequest $request)
     /**
      * Get gift donations for user
      */
-     public function index(GiftDonationRequest $request)
+       public function index(Request $request)
     {
         $user = $request->user();
-        $donor = $user->donor;  // ✅ جلب ملف المتبرع
+        $donor = $user->donor;
 
         if (!$donor) {
             return response()->json([
@@ -125,11 +127,12 @@ public function store(GiftDonationRequest $request)
             ], 404);
         }
 
-        $gifts = GiftDonation::with(['donation.campaign'])
-            ->whereHas('donation', function($q) use ($donor) {
-                $q->where('donor_id', $donor->id);  // ✅ استخدام donor_id
-            })
-            ->get();
+        // جلب جميع الهدايا الخاصة بهذا المتبرع
+        $gifts = Donation::where('donor_id', $donor->id)
+                        ->where('is_gift', true)
+                        ->with('campaign')
+                        ->latest()
+                        ->get();
 
         return response()->json([
             'success' => true,
@@ -139,7 +142,7 @@ public function store(GiftDonationRequest $request)
     /**
      * Get gift details
      */
-    public function show($id, GiftDonationRequest $request)
+    public function show($id, Request $request)
     {
         $user = $request->user();
         $donor = $user->donor;  // ✅ جلب ملف المتبرع
