@@ -120,6 +120,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/donations/{id}/receipt', [DonationController::class, 'receipt']); //!جلب إيصال التبرع
         Route::get('/donations/{id}', [DonationController::class, 'show']); //!جلب تفاصيل تبرع معين
         Route::get('/donations/{id}/pdf', [DonationController::class, 'downloadReceiptPdf']); //!تحميل إيصال التبرع بصيغة PDF
+
         Route::post('/donations/stripe/free', [DonationController::class, 'createFreeStripePayment']);
         Route::post('/donations/stripe/gift', [DonationController::class, 'createGiftStripePayment']);
         Route::post('/donations/stripe/recurring', [DonationController::class, 'createRecurringStripePayment']);
@@ -189,6 +190,7 @@ Route::prefix('tasks')->group(function () {
         // ✅ الشهادات (جديد)
         Route::get('/certificates', [CertificateController::class, 'index']);  //!جلب جميع الشهادات للمتطوع
         Route::get('/points', [VolunteerTaskController::class, 'points']); //!
+        Route::get('/volunteers-list', [ControllersVolunterProfileController::class, 'getVolunteersList']);
         Route::get('/leaderboard', [VolunteerTaskController::class, 'leaderboard']);
 
         Route::get('/categories', [CategoryController::class, 'index']);
@@ -299,7 +301,6 @@ Route::post('/volunteers', [ControllersVolunterProfileController::class, 'store'
 Route::delete('/volunteers/{id}', [ControllersVolunterProfileController::class, 'destroy']);
 Route::patch('/volunteers/{id}/status', [ControllersVolunterProfileController::class, 'updateStatus']);
 Route::get('/volunteers/{id}', [ControllersVolunterProfileController::class, 'show']);
-Route::get('/volunteers-list', [ControllersVolunterProfileController::class, 'getVolunteersList']);
 
 
 
