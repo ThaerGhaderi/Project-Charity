@@ -342,7 +342,7 @@ class SponsorshipManagementController extends Controller
         ], 200);
     }
 
-        public function store(Request $request)
+             public function store(Request $request)
     {
         // نبحث عن الكفيل والمستفيد بالاسم المرسل من الواجهة، أو نضع 1 كافتراضي
         $sponsor = \App\Models\User::where('name', $request->sponsorName)->first();
@@ -367,6 +367,27 @@ class SponsorshipManagementController extends Controller
                 'total_paid' => 0,
             ]);
 
+            // ✅ إرسال الإشعارات للكفيل والمستفيد
+            if ($sponsor && $beneficiary) {
+                // 1. إشعار للكفيل (المتبرع)
+                Notification::sendPushOnly(
+                    $sponsor->id,
+                    'تمت عملية الكفالة بنجاح 🎉',
+                    "شكراً لكرمك! قمت بكفالة المستفيد {$beneficiary->name}. جزاك الله خيراً وبارك في مالك وعطائك.",
+                    'sponsorship',
+                    ['sponsorship_id' => $sponsorship->id]
+                );
+
+                // 2. إشعار للمستفيد
+                Notification::sendPushOnly(
+                    $beneficiary->id,
+                    'تمت كفالتك 🌟',
+                    "بشرى سارة! قام الكفيل {$sponsor->name} بكفالتك. أسعد الله قلوبكم وحقق لكم كل خير.",
+                    'sponsorship',
+                    ['sponsorship_id' => $sponsorship->id]
+                );
+            }
+
             return response()->json([
                 'code' => '201',
                 'success' => true,
@@ -383,7 +404,6 @@ class SponsorshipManagementController extends Controller
             ], 500);
         }
     }
-
     /**
      * حذف كفالة معينة
      */
