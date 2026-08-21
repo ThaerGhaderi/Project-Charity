@@ -1152,7 +1152,6 @@ public function reviewStartRequest($id, Request $request)
         'data' => ['task' => $task->fresh()],
     ], 200);
 }
-
 public function reviewEndRequest($id, Request $request)
 {
     $validated = $request->validate([
@@ -1170,15 +1169,24 @@ public function reviewEndRequest($id, Request $request)
     }
 
     $volunteer = $task->volunteer;
-    $adminId = $request->user()->id ?? 1; // ✅ تسجيل الأدمن
+    $adminId = $request->user()->id ?? 1;
 
     $checkIn = VolunteerCheckIn::where('task_id', $task->id)
         ->where('volunteer_id', $task->volunteer_id)
         ->whereNull('check_out_time')
         ->first();
 
+    // ✅ إذا لم يوجد تسجيل حضور، ننشئ واحداً تلقائياً لتفادي الخطأ
     if (!$checkIn) {
-        return response()->json(['code' => '400', 'success' => false, 'message' => 'لا يوجد تسجيل حضور نشط لهذه المهمة'], 400);
+        $checkIn = VolunteerCheckIn::create([
+            'task_id' => $task->id,
+            'volunteer_id' => $task->volunteer_id,
+            'check_in_time' => $task->start_time ?? now()->subHours(1),
+            'check_out_time' => null,
+            'status' => 'حاضر',
+            'location_verified' => true,
+            'notes' => 'تلقائي بواسطة النظام عند الموافقة على الإنهاء',
+        ]);
     }
 
     if ($validated['action'] === 'reject') {
@@ -1186,7 +1194,7 @@ public function reviewEndRequest($id, Request $request)
             'awaiting_approval' => null,
             'requested_at' => null,
             'rejection_reason' => $validated['rejection_reason'] ?? null,
-            'reviewed_by' => $adminId, // ✅ تم الإصلاح
+            'reviewed_by' => $adminId,
             'reviewed_at' => now(),
         ]);
 
@@ -1221,13 +1229,13 @@ public function reviewEndRequest($id, Request $request)
             'awaiting_approval' => null,
             'requested_at' => null,
             'rejection_reason' => null,
-            'reviewed_by' => $adminId, // ✅ تم الإصلاح
+            'reviewed_by' => $adminId,
             'reviewed_at' => now(),
         ]);
 
         $volunteer->update([
             'total_hours' => $volunteer->total_hours + $duration,
-            'status' => 'متاح' // ✅ المتطوع يعود متاح
+            'status' => 'متاح'
         ]);
 
         VolunteerEvaluation::create([
@@ -1557,20 +1565,28 @@ public function reviewEndRequest($id, Request $request)
         }
 
         try {
-            // نجلب الـ VolunterProfile الصحيح باستخدام user_id
             $volunteerProfile = VolunterProfile::where('user_id', $validated['volunteer_id'])->first();
 
-            // إسناد المهمة للمتطوع وتغيير حالتها إلى قيد التنفيذ
             $task->update([
                 'volunteer_id' => $volunteerProfile->id,
                 'status' => 'قيد التنفيذ',
+                'start_time' => now(), // ✅ تسجيل وقت البداية
                 'supervisor_id' => $request->user()->id ?? 1,
             ]);
 
-            // 👈 تغيير حالة المتطوع إلى "منشغل"
+            // ✅ إنشاء سجل حضور (Check-in) فور إسناد المهمة
+            VolunteerCheckIn::create([
+                'task_id' => $task->id,
+                'volunteer_id' => $volunteerProfile->id,
+                'check_in_time' => now(),
+                'check_out_time' => null,
+                'status' => 'حاضر',
+                'location_verified' => true,
+                'notes' => 'تم الإسناد يدوياً من لوحة التحكم',
+            ]);
+
             $volunteerProfile->update(['status' => 'منشغل']);
 
-            // إرسال إشعار للمتطوع
             if ($volunteerProfile->user) {
                 Notification::sendPushOnly(
                     $volunteerProfile->user->id,

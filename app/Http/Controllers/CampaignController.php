@@ -360,6 +360,7 @@ class CampaignController extends Controller
 
 
       // 3. إضافة حملة
+    
     public function store(CampaignRequest $request): JsonResponse
     {
          $data = $request->validated();
@@ -374,6 +375,18 @@ class CampaignController extends Controller
          $campaign->achieved_amount = 0;
          $campaign->donors_count = 0;
          $campaign->progress_percentage = 0;
+
+         // ✅ إرسال إشعار لجميع مستخدمي التطبيق بإنشاء الحملة الجديدة
+         $userIds = User::pluck('id'); // جلب جميع أرقام المستخدمين
+         foreach ($userIds as $userId) {
+             Notification::sendPushOnly(
+                 $userId,
+                 'حملة خيرية جديدة 🌟',
+                 "تم إطلاق حملة جديدة بعنوان: {$campaign->title}. سارع بالمساهمة في أثرها!",
+                 'campaign',
+                 ['campaign_id' => $campaign->id]
+             );
+         }
 
          $responseData = $this->formatCampaignData($campaign);
          // 👈 نترجم الحالة للعربية بعد خروجها
@@ -512,25 +525,27 @@ class CampaignController extends Controller
     /**
      * ✅ من الملف الأول: Check and update campaign status automatically
      */
-    public function checkAndUpdateStatus($id)
+      public function checkAndUpdateStatus($id)
     {
         $campaign = Campaign::findOrFail($id);
 
         $oldStatus = $campaign->status;
         $autoUpdated = false;
 
-        if ($campaign->status === 'نشطة' && $campaign->collected_amount >= $campaign->goal_amount) {
-            $campaign->status = 'مكتملة';
+        // ✅ تعديل: استخدام الحالة الإنجليزية 'active' بدلاً من 'نشطة'
+        if ($campaign->status === 'active' && $campaign->collected_amount >= $campaign->goal_amount) {
+            $campaign->status = 'completed'; // ✅ تعديل: استخدام 'completed' بدلاً من 'مكتملة'
             $campaign->save();
             $autoUpdated = true;
-            $this->sendStatusChangeNotifications($campaign, $oldStatus, 'مكتملة');
+            $this->sendStatusChangeNotifications($campaign, $oldStatus, 'completed');
         }
 
-        if ($campaign->status === 'نشطة' && $campaign->end_date && $campaign->end_date < now()) {
-            $campaign->status = 'مغلقة';
+        // ✅ تعديل: استخدام 'active' و 'closed'
+        if ($campaign->status === 'active' && $campaign->end_date && $campaign->end_date < now()) {
+            $campaign->status = 'closed';
             $campaign->save();
             $autoUpdated = true;
-            $this->sendStatusChangeNotifications($campaign, $oldStatus, 'مغلقة');
+            $this->sendStatusChangeNotifications($campaign, $oldStatus, 'closed');
         }
 
         return response()->json([
@@ -544,7 +559,6 @@ class CampaignController extends Controller
             ]
         ], 200);
     }
-
     /**
      * ✅ من الملف الأول: Send notifications to donors when campaign status changes
      */
