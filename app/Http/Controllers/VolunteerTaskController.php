@@ -1549,7 +1549,7 @@ public function reviewEndRequest($id, Request $request)
        /**
      * ✅ إسناد مهمة لمتطوع معين (للأدمن)
      */
-    public function assign($id, Request $request)
+       public function assign($id, Request $request)
     {
         $validated = $request->validate([
             'volunteer_id' => 'required|integer|exists:volunter_profiles,user_id',
@@ -1567,14 +1567,37 @@ public function reviewEndRequest($id, Request $request)
         try {
             $volunteerProfile = VolunterProfile::where('user_id', $validated['volunteer_id'])->first();
 
+            // ✅ فحص ذكي: هل المتطوع منشغل حالياً بمهمة أخرى؟
+            if ($volunteerProfile->status === 'منشغل') {
+                return response()->json([
+                    'code' => '400',
+                    'success' => false,
+                    'message' => 'لا يمكن إسناد المهمة، هذا المتطوع منشغل حالياً بمهمة أخرى.'
+                ], 400);
+            }
+
+            // ✅ فحص إضافي (حماية مزدوجة): هل يوجد له مهمة قيد التنفيذ أو معلقة في قاعدة البيانات؟
+            $hasActiveTask = VolunteerTask::where('volunteer_id', $volunteerProfile->id)
+                ->whereIn('status', ['قيد التنفيذ', 'معلقة'])
+                ->exists();
+
+            if ($hasActiveTask) {
+                return response()->json([
+                    'code' => '400',
+                    'success' => false,
+                    'message' => 'هذا المتطوع لديه مهمة نشطة لم ينهها بعد. يرجى اختيار متطوع متاح.'
+                ], 400);
+            }
+
+            // ✅ إذا كان المتطوع متاحاً، نقوم بالإسناد
             $task->update([
                 'volunteer_id' => $volunteerProfile->id,
                 'status' => 'قيد التنفيذ',
-                'start_time' => now(), // ✅ تسجيل وقت البداية
+                'start_time' => now(),
                 'supervisor_id' => $request->user()->id ?? 1,
             ]);
 
-            // ✅ إنشاء سجل حضور (Check-in) فور إسناد المهمة
+            // إنشاء سجل حضور (Check-in) فور إسناد المهمة
             VolunteerCheckIn::create([
                 'task_id' => $task->id,
                 'volunteer_id' => $volunteerProfile->id,
@@ -1585,8 +1608,10 @@ public function reviewEndRequest($id, Request $request)
                 'notes' => 'تم الإسناد يدوياً من لوحة التحكم',
             ]);
 
+            // تغيير حالة المتطوع إلى "منشغل"
             $volunteerProfile->update(['status' => 'منشغل']);
 
+            // إرسال إشعار للمتطوع
             if ($volunteerProfile->user) {
                 Notification::sendPushOnly(
                     $volunteerProfile->user->id,
