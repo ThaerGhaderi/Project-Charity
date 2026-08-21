@@ -243,11 +243,13 @@ class ReportController extends Controller
                 ];
             });
 
-        $list = VolunterProfile::with('user')->get()->map(function ($v) {
+        // ✅ تمت إضافة user.profile لجلب الجنس
+        $list = VolunterProfile::with('user.profile')->get()->map(function ($v) {
             return [
                 'id'     => $v->id,
                 'name'   => $v->user->name ?? null,
                 'status' => $this->volunteerStatusMap[$v->status] ?? $v->status,
+                'gender' => $v->user?->profile?->gender ?? 'غير محدد', // ✅ جلب الجنس
             ];
         });
 
