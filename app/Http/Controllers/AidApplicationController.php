@@ -1,5 +1,4 @@
 <?php
-// app/Http/Controllers/AidApplicationController.php
 
 namespace App\Http\Controllers;
 
@@ -122,9 +121,7 @@ class AidApplicationController extends Controller
                 'status' => 'pending',
             ]);
 
-            // ✅ إنشاء مهمة مفتوحة للجميع
             $this->createOpenTask($application);
-
             $this->notifyAdmins($application);
 
             return response()->json([
@@ -159,7 +156,6 @@ class AidApplicationController extends Controller
             $validated = $request->validated();
             $application->update($validated);
 
-            // ✅ تحديث المهمة المرتبطة
             if ($application->volunteerTask) {
                 $application->volunteerTask->update([
                     'title' => "مساعدة: {$application->type} - {$application->user->name}",
@@ -196,7 +192,6 @@ class AidApplicationController extends Controller
             ->findOrFail($id);
 
         try {
-            // ✅ حذف المهمة المرتبطة
             if ($application->volunteerTask) {
                 $application->volunteerTask->delete();
             }
@@ -305,7 +300,6 @@ class AidApplicationController extends Controller
 
             $application->save();
 
-            // ✅ تحديث المهمة المرتبطة
             if ($application->volunteerTask) {
                 $taskStatus = $this->mapStatusToTaskStatus($newStatus);
                 $application->volunteerTask->update([
@@ -313,7 +307,6 @@ class AidApplicationController extends Controller
                     'supervisor_notes' => $validated['admin_notes'] ?? null,
                 ]);
 
-                // ✅ إذا تم قبول الطلب، تأكد من أن المهمة لا تزال مفتوحة
                 if ($newStatus === 'approved' && !$application->volunteerTask->volunteer_id) {
                     // المهمة تبقى مفتوحة للمتطوعين
                 }
@@ -401,17 +394,192 @@ class AidApplicationController extends Controller
         ], 200);
     }
 
-    // ==================== PRIVATE METHODS ====================
+    // ==================== ADMIN METHODS (DASHBOARD) ====================
 
     /**
-     * ✅ إنشاء مهمة مفتوحة للجميع (بدون volunteer_id)
+     * (للداش بورد) جلب كل الطلبات
      */
+    public function getAll(Request $request)
+    {
+       $query = AidApplication::with(['user.profile.city', 'beneficiary']);
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->filled('type')) {
+            $query->where('type', $request->type);
+        }
+
+        $applications = $query->latest()->get();
+
+        $data = $applications->map(function ($item) {
+            return [
+                'id'          => $item->id,
+                'name'        => optional($item->user)->name,
+                'phone'       => optional($item->user?->profile)->phone,
+                'city'        => optional($item->user?->profile?->city)->name,
+                'type'        => $item->type,
+                'is_urgent'   => $item->is_urgent,
+                'status'      => $item->status,
+                'status_text' => $item->status_text, // يأتي تلقائياً من الموديل
+                'created_at'  => $item->created_at->format('Y-m-d'),
+            ];
+        });
+
+        return response()->json([
+            'data'  => $data,
+            'total' => $data->count(),
+        ]);
+    }
+
+    /**
+     * (للداش بورد) عرض تفاصيل طلب واحد
+     */
+    public function display($id)
+    {
+        $item = AidApplication::with(['user.profile.city', 'beneficiary', 'reviewer'])->findOrFail($id);
+
+        return response()->json([
+            'data' => [
+                'id'                => $item->id,
+                'name'              => optional($item->user)->name,
+                'phone'             => optional($item->user?->profile)->phone,
+                'city'              => optional($item->user?->profile?->city)->name,
+                'type'              => $item->type,
+                'description'       => $item->description,
+                'is_urgent'         => $item->is_urgent,
+                'amount_requested'  => $item->amount_requested,
+                'amount_approved'   => $item->amount_approved,
+                'status'            => $item->status,
+                'status_text'       => $item->status_text, // يأتي تلقائياً من الموديل
+                'admin_notes'       => $item->admin_notes,
+                'reviewed_by'       => optional($item->reviewer)->name,
+                'reviewed_at'       => optional($item->reviewed_at)?->format('Y-m-d H:i'),
+                'created_at'        => $item->created_at->format('Y-m-d'),
+            ],
+        ]);
+    }
+
+    /**
+     * (للداش بورد) تحديث حالة الطلب
+     */
+    public function updateStory(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'status'          => 'required|in:pending,reviewing,approved,rejected,completed,cancelled,قيد الانتظار,مراجعة,موافقة,مرفوض,مكتمل,ملغة',
+            'admin_notes'     => 'nullable|string|max:1000',
+            'amount_approved' => 'nullable|numeric',
+        ]);
+
+        $item = AidApplication::find($id);
+        if (!$item) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Aid Application not found.'
+            ], 404);
+        }
+
+        // ✅ ترجمة الحالة من العربية إلى الإنجليزية قبل حفظها في الداتا بيز
+        $statusMap = [
+            'قيد الانتظار' => 'pending',
+            'مراجعة' => 'reviewing',
+            'موافقة' => 'approved',
+            'مرفوض' => 'rejected',
+            'مكتمل' => 'completed',
+            'ملغة' => 'cancelled',
+        ];
+
+        $rawStatus = $validated['status'];
+        $finalStatus = $statusMap[$rawStatus] ?? $rawStatus; // إذا كانت إنجليزية أصلاً تترك كما هي
+
+        $oldStatus = $item->status;
+        $item->status = $finalStatus; // نحفظ الإنجليزية
+        $item->reviewed_by = null;
+        $item->reviewed_at = now();
+
+        if ($request->filled('admin_notes')) {
+            $item->admin_notes = $validated['admin_notes'];
+        }
+
+        if ($request->filled('amount_approved')) {
+            $item->amount_approved = $validated['amount_approved'];
+        }
+
+        $item->save();
+
+        // ✅ إرسال الإشعارات إذا تغيرت الحالة
+        if ($item->status !== $oldStatus) {
+
+            $statusMessages = [
+                'approved' => '✅ تم قبول طلبك! سنتواصل معك قريباً.',
+                'rejected' => '❌ عذراً، تم رفض طلبك. يمكنك مراجعة الأسباب في الملاحظات.',
+                'reviewing' => '🔄 طلبك قيد المراجعة من قبل الفريق المختص.',
+                'completed' => '✅ تم إكمال طلبك بنجاح.',
+                'cancelled' => '❌ تم إلغاء طلبك.',
+                'pending' => '⏳ تم إعادة طلبك إلى حالة الانتظار.',
+            ];
+
+            $title = "📢 تحديث حالة طلب المساعدة";
+            $body = $statusMessages[$item->status] ?? "تم تحديث حالة طلبك إلى: " . $item->status_text;
+
+            if ($item->status === 'approved' && $item->amount_approved) {
+                $body .= " المبلغ المعتمد: {$item->amount_approved} \$";
+            }
+
+            if ($item->status === 'rejected' && $item->admin_notes) {
+                $body .= " السبب: {$item->admin_notes}";
+            }
+
+            Notification::sendPushOnly(
+                $item->user_id,
+                $title,
+                $body,
+                'aid_application_status',
+                [
+                    'application_id' => $item->id,
+                    'old_status' => $oldStatus,
+                    'new_status' => $item->status
+                ]
+            );
+
+            // ✅ إشعار للمتطوعين بفتح مهمة جديدة (عند الموافقة فقط)
+            if ($item->status === 'approved') {
+                $volunteers = User::where('role', 'volunteer')->get();
+                $taskTitle = "مساعدة: {$item->type} - {$item->user->name}";
+
+                foreach ($volunteers as $volunteer) {
+                    Notification::sendPushOnly(
+                        $volunteer->id,
+                        'مهمة متاحة جديدة 📝',
+                        "تم فتح مهمة جديدة باسم: {$taskTitle}. يمكنك الاطلاع عليها في المهام المتاحة.",
+                        'volunteer_task',
+                        [
+                            'application_id' => $item->id,
+                            'task_title' => $taskTitle
+                        ]
+                    );
+                }
+            }
+        }
+
+        return response()->json([
+            'message' => 'تم تحديث حالة الطلب بنجاح',
+            'data' => [
+                'id'          => $item->id,
+                'status'      => $item->status,
+                'status_text' => $item->status_text,
+            ],
+        ]);
+    }
+
+    // ==================== PRIVATE METHODS ====================
+
     private function createOpenTask($application)
     {
         $admin = User::whereIn('role', ['admin', 'Admin'])->first();
         $supervisorId = $admin ? $admin->id : 1;
 
-        // ✅ جلب موقع المستفيد
         $location = 'غير محدد';
         if ($application->user && $application->user->profile) {
             $location = $application->user->profile->city?->name ?? 'غير محدد';
@@ -420,7 +588,7 @@ class AidApplicationController extends Controller
         VolunteerTask::create([
             'aid_application_id' => $application->id,
             'beneficiary_id' => $application->user_id,
-            'volunteer_id' => null, // 🔑 مفتوحة للجميع
+            'volunteer_id' => null,
             'supervisor_id' => $supervisorId,
             'visit_id' => null,
             'campaign_id' => null,
@@ -439,23 +607,17 @@ class AidApplicationController extends Controller
         ]);
     }
 
-    /**
-     * تحويل حالة الطلب إلى حالة المهمة
-     */
     private function mapStatusToTaskStatus($status)
     {
         return match($status) {
             'pending', 'reviewing' => 'جديدة',
-            'approved' => 'جديدة', // تبقى مفتوحة للمتطوعين
+            'approved' => 'جديدة',
             'completed' => 'مكتملة',
             'rejected', 'cancelled' => 'ملغية',
             default => 'جديدة',
         };
     }
 
-    /**
-     * إشعار للمشرفين
-     */
     private function notifyAdmins(AidApplication $application)
     {
         $admins = User::whereIn('role', ['admin', 'Admin'])->get();
@@ -482,9 +644,6 @@ class AidApplicationController extends Controller
         }
     }
 
-    /**
-     * إشعار للمستفيد
-     */
     private function notifyBeneficiary(AidApplication $application, $oldStatus, $newStatus)
     {
         $statusMessages = [
@@ -519,9 +678,6 @@ class AidApplicationController extends Controller
         );
     }
 
-    /**
-     * الحصول على نص الحالة
-     */
     private function getStatusText($status)
     {
         return match($status) {
@@ -534,162 +690,4 @@ class AidApplicationController extends Controller
             default => $status,
         };
     }
-      public function getAll(Request $request)
-    {
-       // ✅ جلب العلاقة الصحيحة للهاتف والمدينة
-       $query = AidApplication::with(['user.profile.city', 'beneficiary']);
-
-        if ($request->filled('status')) {
-            $query->where('status', $request->status);
-        }
-
-        if ($request->filled('type')) {
-            $query->where('type', $request->type);
-        }
-
-        $applications = $query->latest()->get();
-
-        $data = $applications->map(function ($item) {
-            return [
-                'id'          => $item->id,
-                'name'        => optional($item->user)->name,
-                // ✅ جلب الهاتف والمدينة من البروفايل
-                'phone'       => optional($item->user?->profile)->phone,
-                'city'        => optional($item->user?->profile?->city)->name,
-                'type'        => $item->type,
-                'is_urgent'   => $item->is_urgent,
-                'status'      => $item->status,
-                'status_text' => $item->status_text,
-                'created_at'  => $item->created_at->format('Y-m-d'),
-            ];
-        });
-
-        return response()->json([
-            'data'  => $data,
-            'total' => $data->count(),
-        ]);
-    }
-
-    public function display($id)
-    {
-        // ✅ جلب العلاقة الصحيحة للهاتف والمدينة
-        $item = AidApplication::with(['user.profile.city', 'beneficiary', 'reviewer'])->findOrFail($id);
-
-        return response()->json([
-            'data' => [
-                'id'                => $item->id,
-                'name'              => optional($item->user)->name,
-                // ✅ جلب الهاتف والمدينة من البروفايل
-                'phone'             => optional($item->user?->profile)->phone,
-                'city'              => optional($item->user?->profile?->city)->name,
-                'type'              => $item->type,
-                'description'       => $item->description,
-                'is_urgent'         => $item->is_urgent,
-                'amount_requested'  => $item->amount_requested,
-                'amount_approved'   => $item->amount_approved,
-                'status'            => $item->status,
-                'status_text'       => $item->status_text,
-                'admin_notes'       => $item->admin_notes,
-                'reviewed_by'       => optional($item->reviewer)->name,
-                'reviewed_at'       => optional($item->reviewed_at)?->format('Y-m-d H:i'),
-                'created_at'        => $item->created_at->format('Y-m-d'),
-            ],
-        ]);
-    }
-
-      public function updateStory(Request $request, $id)
-    {
-        $validated = $request->validate([
-            'status'          => 'required|in:pending,reviewing,approved,rejected,completed,cancelled,قيد الانتظار,مراجعة,موافقة,مرفوض,مكتمل,ملغة',
-            'admin_notes'     => 'nullable|string|max:1000',
-            'amount_approved' => 'nullable|numeric',
-        ]);
-
-        $item = AidApplication::find($id);
-        if (!$item) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Aid Application not found.'
-            ], 404);
-        }
-
-        $oldStatus = $item->status;
-        $item->status = $validated['status'];
-        $item->reviewed_by = null;
-        $item->reviewed_at = now();
-
-        if ($request->filled('admin_notes')) {
-            $item->admin_notes = $validated['admin_notes'];
-        }
-
-        if ($request->filled('amount_approved')) {
-            $item->amount_approved = $validated['amount_approved'];
-        }
-
-        $item->save();
-
-        // ✅ إرسال الإشعارات إذا تغيرت الحالة
-        if ($item->status !== $oldStatus) {
-
-            // 1. إشعار للمستفيد بتحديث حالته
-            $statusMessages = [
-                'approved' => '✅ تم قبول طلبك! سنتواصل معك قريباً.',
-                'rejected' => '❌ عذراً، تم رفض طلبك. يمكنك مراجعة الأسباب في الملاحظات.',
-                'reviewing' => '🔄 طلبك قيد المراجعة من قبل الفريق المختص.',
-                'completed' => '✅ تم إكمال طلبك بنجاح.',
-                'cancelled' => '❌ تم إلغاء طلبك.',
-                'pending' => '⏳ تم إعادة طلبك إلى حالة الانتظار.',
-            ];
-
-            $title = "📢 تحديث حالة طلب المساعدة";
-            $body = $statusMessages[$item->status] ?? "تم تحديث حالة طلبك إلى: " . $item->status;
-
-            if ($item->status === 'approved' && $item->amount_approved) {
-                $body .= " المبلغ المعتمد: {$item->amount_approved} \$";
-            }
-
-            if ($item->status === 'rejected' && $item->admin_notes) {
-                $body .= " السبب: {$item->admin_notes}";
-            }
-
-            \App\Models\Notification::sendPushOnly(
-                $item->user_id,
-                $title,
-                $body,
-                'aid_application_status',
-                [
-                    'application_id' => $item->id,
-                    'old_status' => $oldStatus,
-                    'new_status' => $item->status
-                ]
-            );
-
-            // 2. ✅ إشعار للمتطوعين بفتح مهمة جديدة (عند الموافقة فقط)
-            if (in_array($item->status, ['approved', 'موافقة'])) {
-                $volunteers = \App\Models\User::where('role', 'volunteer')->get();
-                $taskTitle = "مساعدة: {$item->type} - {$item->user->name}";
-
-                foreach ($volunteers as $volunteer) {
-                    \App\Models\Notification::sendPushOnly(
-                        $volunteer->id,
-                        'مهمة متاحة جديدة 📝',
-                        "تم فتح مهمة جديدة باسم: {$taskTitle}. يمكنك الاطلاع عليها في المهام المتاحة.",
-                        'volunteer_task',
-                        [
-                            'application_id' => $item->id,
-                            'task_title' => $taskTitle
-                        ]
-                    );
-                }
-            }
-        }
-
-        return response()->json([
-            'message' => 'تم تحديث حالة الطلب بنجاح',
-            'data' => [
-                'id'          => $item->id,
-                'status'      => $item->status,
-                'status_text' => $item->status_text,
-            ],
-        ]);
-    }}
+}

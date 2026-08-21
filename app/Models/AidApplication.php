@@ -1,5 +1,4 @@
 <?php
-// app/Models/AidApplication.php
 
 namespace App\Models;
 
@@ -31,8 +30,11 @@ class AidApplication extends Model
         'amount_approved' => 'decimal:2',
     ];
 
+    // ✅ هذا السطر يجعل الحقل يظهر تلقائياً في كل استجابة JSON
+    protected $appends = ['status_text', 'type_text'];
+
     const TYPES = ['مالية', 'تعليمية', 'صحية', 'نفسية', 'إغاثية', 'إيواء', 'غذاء', 'مياه', 'كسوة', 'دعم نفسي', 'تمكين اقتصادي'];
-    
+
     const STATUSES = ['pending', 'reviewing', 'approved', 'rejected', 'completed', 'cancelled'];
 
     // Relationships
@@ -51,6 +53,11 @@ class AidApplication extends Model
         return $this->belongsTo(User::class, 'reviewed_by');
     }
 
+    public function volunteerTask()
+    {
+        return $this->hasOne(VolunteerTask::class, 'aid_application_id');
+    }
+
     // Scopes
     public function scopePending($query)
     {
@@ -67,25 +74,30 @@ class AidApplication extends Model
         return $query->where('user_id', $userId);
     }
 
-    // Accessors
+    // ✅ Accessors (تدعم الإنجليزي والعربي)
     public function getStatusTextAttribute()
     {
-        return [
+        $map = [
             'pending' => 'قيد الانتظار',
             'reviewing' => 'قيد المراجعة',
             'approved' => 'مقبول',
             'rejected' => 'مرفوض',
             'completed' => 'مكتمل',
-            'cancelled' => 'ملغي'
-        ][$this->status] ?? $this->status;
+            'cancelled' => 'ملغي',
+            // دعم احتياطي إذا كانت مدخلة بالعربي
+            'قيد الانتظار' => 'قيد الانتظار',
+            'مراجعة' => 'قيد المراجعة',
+            'موافقة' => 'مقبول',
+            'مرفوض' => 'مرفوض',
+            'مكتمل' => 'مكتمل',
+            'ملغة' => 'ملغي',
+        ];
+
+        return $map[$this->status] ?? $this->status;
     }
 
     public function getTypeTextAttribute()
     {
         return $this->type;
-    }
-      public function volunteerTask()
-    {
-        return $this->hasOne(VolunteerTask::class, 'aid_application_id');
     }
 }
