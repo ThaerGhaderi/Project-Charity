@@ -1,10 +1,8 @@
-<div dir="rtl">
+# Charity Platform
 
-# منصة Charity
-
-منصة رقمية لإدارة العمل الخيري وربط **المتبرعين** و**المستفيدين** و**المتطوعين** والجهة المشرفة ضمن نظام واحد. توفر المنصة دورة متكاملة تبدأ من إنشاء الحساب وإكمال الملف الشخصي، مرورًا بالحملات والتبرعات والكفالات وطلبات المساعدة، ووصولًا إلى الإشعارات والتقارير والإيصالات الرقمية.
-
-</div>
+<p align="center">
+  A complete digital platform for managing charitable activities and connecting donors, beneficiaries, volunteers, and charity administrators in one system.
+</p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Laravel-12.x-FF2D20?logo=laravel&logoColor=white" alt="Laravel 12">
@@ -14,145 +12,196 @@
   <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License">
 </p>
 
-<div dir="rtl">
+## Table of Contents
 
-## فهرس المحتويات
+- [Overview](#overview)
+- [Demo and Screenshots](#demo-and-screenshots)
+- [Core Features](#core-features)
+- [User Roles](#user-roles)
+- [Technology Stack and Integrations](#technology-stack-and-integrations)
+- [Requirements](#requirements)
+- [Local Installation](#local-installation)
+- [External Services Configuration](#external-services-configuration)
+- [Useful Commands](#useful-commands)
+- [API Overview](#api-overview)
+- [Project Structure](#project-structure)
+- [Testing](#testing)
+- [Security](#security)
+- [Contributing](#contributing)
+- [License](#license)
 
-- [عن المشروع](#عن-المشروع)
-- [الوظائف الرئيسية](#الوظائف-الرئيسية)
-- [الأدوار](#الأدوار)
-- [التقنيات والتكاملات](#التقنيات-والتكاملات)
-- [متطلبات التشغيل](#متطلبات-التشغيل)
-- [التثبيت والتشغيل محليًا](#التثبيت-والتشغيل-محليًا)
-- [إعداد الخدمات الخارجية](#إعداد-الخدمات-الخارجية)
-- [الأوامر المهمة](#الأوامر-المهمة)
-- [واجهة الـ API](#واجهة-الـ-api)
-- [هيكل المشروع](#هيكل-المشروع)
-- [الاختبارات](#الاختبارات)
-- [الأمان](#الأمان)
-- [المساهمة](#المساهمة)
-- [الترخيص](#الترخيص)
+## Overview
 
-## عن المشروع
+Charity is an API-first charitable management platform built with Laravel. It supports the complete charity workflow, from account registration and profile completion to campaigns, donations, sponsorships, aid applications, notifications, reporting, and digital receipts.
 
-Charity هو نظام إدارة خيري مبني بأسلوب API-first باستخدام Laravel. يركز النظام على:
+The platform is designed to:
 
-- تمكين المتبرع من اكتشاف الحملات والتبرع لمرة واحدة أو بشكل متكرر.
-- تنظيم طلبات المساعدة والزيارات الخاصة بالمستفيدين.
-- إدارة فرص التطوع والمهام والتقييمات والشهادات والنقاط.
-- إدارة الكفالات والمدفوعات والرسائل بين الكافل والمستفيد.
-- تزويد المشرفين بإدارة مركزية للمستخدمين والحملات والتبرعات والبلاغات.
-- توفير إشعارات فورية، محادثات، تقارير، وإيصالات تبرع بصيغة PDF.
+- Help donors discover campaigns and make one-time or recurring donations.
+- Organize beneficiary aid applications and scheduled visits.
+- Manage volunteer opportunities, tasks, evaluations, certificates, and points.
+- Manage sponsorships, sponsorship payments, and communication between sponsors and beneficiaries.
+- Give administrators centralized control over users, campaigns, donations, beneficiaries, and volunteer operations.
+- Provide notifications, real-time conversations, reports, and PDF donation receipts.
 
-## الوظائف الرئيسية
+## Demo and Screenshots
 
-### التبرعات والحملات
+### Live Demo
 
-- إنشاء الحملات وتعديلها وعرضها وتصنيفها.
-- إبراز الحملات العاجلة والمميزة.
-- التبرع لمرة واحدة، والتبرع بالهدية، والتبرع الدوري.
-- سلة تبرعات وسجل تفصيلي لتبرعات المستخدم.
-- إحصائيات التبرعات وإيصال قابل للعرض والتنزيل بصيغة PDF.
-- تصدير بيانات التبرعات إلى ملفات Excel.
-- دعم الدفع عبر Stripe، مع تهيئة تكاملات الدفع الأخرى حسب إعدادات البيئة.
+> The public deployment URL will be added here after the production environment is published.
 
-### المستفيدون وطلبات المساعدة
+- **Live application:** `https://your-demo-url.com`
+- **API base URL:** `https://your-demo-url.com/api`
+- **Local application:** `http://127.0.0.1:8000`
 
-- إنشاء ملف المستفيد وإكمال بياناته وتحديثها.
-- تقديم طلبات مساعدة ومتابعة حالتها وإحصائياتها.
-- إدارة الزيارات ومواعيدها وتفاصيلها.
-- تصنيف الاحتياجات والمدن والبيانات المرجعية.
-- إدارة المستفيدين وحالات القبول من خلال مسارات الإدارة.
+### Main Screens
 
-### التطوع
+Replace the placeholder image paths below with screenshots from the deployed application. Keeping screenshots inside `docs/screenshots/` makes them easy to maintain and version with the project.
 
-- ملفات المتطوعين ومجالاتهم ومهاراتهم ولغاتهم وأيام التوفر.
-- إنشاء مهام تطوعية وإسنادها ومتابعة طلبات البدء والإنهاء.
-- تسجيل الحضور وتقييم المهام.
-- نقاط المتطوعين ولوحة ترتيب وشهادات وشارات إنجاز.
+<p align="center">
+  <img src="docs/screenshots/home.png" alt="Charity platform home page" width="48%">
+  <img src="docs/screenshots/campaigns.png" alt="Campaigns listing" width="48%">
+</p>
 
-### الكفالات والتواصل
+<p align="center">
+  <img src="docs/screenshots/donor-dashboard.png" alt="Donor dashboard" width="48%">
+  <img src="docs/screenshots/admin-dashboard.png" alt="Administration dashboard" width="48%">
+</p>
 
-- عرض المستفيدين المتاحين للكفالة وإنشاء الكفالات وإدارتها.
-- إدارة دفعات الكفالة.
-- رسائل مباشرة بين الكافل والمستفيد.
-- محادثات فردية أو جماعية مع دعم حالة القراءة ومؤشر الكتابة.
+### Suggested Demo Flow
 
-### الإشعارات والتقارير
+The following flow demonstrates the main platform capabilities:
 
-- إشعارات داخلية مع عداد لغير المقروء وإمكانية تعليم الإشعارات كمقروءة.
-- تفضيلات الإشعارات وتسجيل رموز Firebase Cloud Messaging.
-- تقارير عامة للتبرعات، مصادر الدفع، الفئات، كبار المتبرعين، المستفيدين والمتطوعين.
-- سجلات تدقيق وسجلات دخول لمتابعة الأنشطة المهمة.
+1. Register a new user and complete the required profile.
+2. Browse featured campaigns and filter them by category.
+3. Create a one-time, gift, or recurring donation.
+4. View the donation status and download the generated PDF receipt.
+5. Create or review a sponsorship and inspect its payment history.
+6. Sign in as a beneficiary and submit an aid application.
+7. Sign in as a volunteer, request a task, check in, and review earned points.
+8. Open the administration reports to review donations, beneficiaries, and volunteers.
 
-## الأدوار
+### Demo Credentials
 
-يدعم النظام عدة أنواع من المستخدمين، ولكل نوع مسارات وعمليات مناسبة:
+For security reasons, real credentials should not be stored in this repository. Add temporary demo accounts to your deployment documentation or hosting platform instead:
 
-| الدور | المسؤوليات الأساسية |
+| Account | Email | Password |
+| --- | --- | --- |
+| Donor | `demo-donor@example.com` | `Use-a-secure-demo-password` |
+| Beneficiary | `demo-beneficiary@example.com` | `Use-a-secure-demo-password` |
+| Volunteer | `demo-volunteer@example.com` | `Use-a-secure-demo-password` |
+| Administrator | `demo-admin@example.com` | `Use-a-secure-demo-password` |
+
+## Core Features
+
+### Donations and Campaigns
+
+- Create, update, view, and categorize campaigns.
+- Feature urgent and highlighted campaigns.
+- Support one-time, gift, and recurring donations.
+- Manage a donation cart and a detailed donor donation history.
+- Provide donation statistics and downloadable PDF receipts.
+- Export donation data to Excel files.
+- Support Stripe payments and additional payment integrations through environment configuration.
+
+### Beneficiaries and Aid Applications
+
+- Create and complete beneficiary profiles.
+- Submit aid applications and track their statuses and statistics.
+- Schedule and manage beneficiary visits.
+- Organize needs, cities, categories, and other reference data.
+- Manage beneficiary records and approval statuses through administrative endpoints.
+
+### Volunteering
+
+- Manage volunteer profiles, domains, skills, languages, and availability days.
+- Create and assign volunteer tasks.
+- Track task start and completion requests.
+- Record check-ins and evaluate completed tasks.
+- Award volunteer points, badges, certificates, and leaderboard positions.
+
+### Sponsorships and Communication
+
+- Display beneficiaries available for sponsorship.
+- Create, update, and manage sponsorships.
+- Track sponsorship payments.
+- Exchange messages between sponsors and beneficiaries.
+- Support individual and group conversations with read status and typing indicators.
+
+### Notifications and Reporting
+
+- Provide in-app notifications with unread counts and read-status management.
+- Manage notification preferences and Firebase Cloud Messaging tokens.
+- Generate reports for donations, payment sources, categories, top donors, beneficiaries, and volunteers.
+- Maintain audit logs and login logs for important activities.
+
+## User Roles
+
+The application supports several user types and administrative roles:
+
+| Role | Main Responsibilities |
 | --- | --- |
-| المتبرع `Donor` | تصفح الحملات، التبرع، متابعة السجل والإيصالات، وإدارة الكفالات |
-| المستفيد `Beneficiary` | إكمال الملف، تقديم طلبات المساعدة، وإدارة الزيارات |
-| المتطوع `volunteer` | استعراض المهام، طلب تنفيذها، تسجيل الحضور، واستلام التقييمات والشهادات |
-| موظف الإدارة | إدارة المستخدمين والحملات والتبرعات والمستفيدين والمهام |
-| مدير / محاسب / مشاهد | أدوار إدارية متخصصة بحسب الصلاحيات التشغيلية |
+| Donor | Browse campaigns, donate, view donation history and receipts, and manage sponsorships |
+| Beneficiary | Complete a profile, submit aid applications, and manage visits |
+| Volunteer | Browse tasks, request assignments, check in, and receive evaluations and certificates |
+| Administrator | Manage users, campaigns, donations, beneficiaries, volunteers, and tasks |
+| Manager / Accountant / Viewer | Specialized administrative access based on operational permissions |
 
-## التقنيات والتكاملات
+## Technology Stack and Integrations
 
-- **Backend:** PHP 8.2+ وLaravel 12.
-- **Authentication:** Laravel Sanctum وواجهات تسجيل الدخول والتحقق عبر OTP.
-- **Database:** MySQL في بيئة التشغيل المحلية، مع SQLite داخل إعداد الاختبارات.
-- **Frontend assets:** Vite وTailwind CSS وAxios.
-- **Payments:** Stripe، مع حزم جاهزة لتكامل PayerURL والدفع بالعملات الرقمية.
+- **Backend:** PHP 8.2+ and Laravel 12.
+- **Authentication:** Laravel Sanctum with OTP-based verification flows.
+- **Database:** MySQL for local development and SQLite in-memory databases for tests.
+- **Frontend assets:** Vite, Tailwind CSS, and Axios.
+- **Payments:** Stripe, with PayerURL and cryptocurrency checkout packages available.
 - **Notifications:** Firebase Cloud Messaging.
-- **Realtime:** Pusher وبث أحداث الرسائل وحالة القراءة والكتابة.
-- **Documents:** Dompdf وmPDF لإنتاج إيصالات PDF.
-- **Exports:** Laravel Excel لتصدير البيانات.
-- **Social login:** Laravel Socialite مع Google وFacebook عند تفعيل مفاتيح الخدمات.
+- **Real-time features:** Pusher and broadcast events for messaging, read status, and typing indicators.
+- **Documents:** Dompdf and mPDF for PDF receipts.
+- **Exports:** Laravel Excel for data exports.
+- **Social login:** Laravel Socialite with Google and Facebook support when credentials are configured.
 
-## متطلبات التشغيل
+## Requirements
 
-تأكد من تثبيت ما يلي:
+Install the following before running the project:
 
-- PHP `8.2` أو أحدث مع الامتدادات `gd` و`pdo_mysql` و`zip`.
+- PHP `8.2` or newer with the `gd`, `pdo_mysql`, and `zip` extensions.
 - Composer 2.
-- Node.js وnpm.
-- MySQL 8 أو MariaDB متوافق.
-- بيانات اعتماد الخدمات الخارجية عند تفعيل الدفع أو الإشعارات أو تسجيل الدخول الاجتماعي.
+- Node.js and npm.
+- MySQL 8 or a compatible MariaDB version.
+- Credentials for external services when payments, notifications, email, or social login are enabled.
 
-## التثبيت والتشغيل محليًا
+## Local Installation
 
-### 1. جلب المشروع
+### 1. Clone the Repository
 
 ```bash
 git clone https://github.com/ThaerGhaderi/Project-Charity.git
 cd Project-Charity
 ```
 
-### 2. تثبيت الاعتماديات
+### 2. Install Dependencies
 
 ```bash
 composer install
 npm install
 ```
 
-### 3. إنشاء ملف البيئة
+### 3. Configure the Environment
 
 ```bash
 cp .env.example .env
 php artisan key:generate
 ```
 
-في Windows يمكن نسخ الملف يدويًا أو تنفيذ:
+On Windows PowerShell:
 
 ```powershell
 Copy-Item .env.example .env
 php artisan key:generate
 ```
 
-### 4. إعداد قاعدة البيانات
+### 4. Configure the Database
 
-أنشئ قاعدة بيانات باسم `project_charity` أو اختر اسمًا آخر، ثم حدّث قيم `DB_*` في `.env`:
+Create a database named `project_charity`, or choose another database name and update the `DB_*` values in `.env`:
 
 ```dotenv
 DB_CONNECTION=mysql
@@ -163,46 +212,46 @@ DB_USERNAME=root
 DB_PASSWORD=
 ```
 
-بعد ذلك شغّل الترحيلات:
+Run the migrations:
 
 ```bash
 php artisan migrate
 ```
 
-لإنشاء بيانات تجريبية محلية:
+To load local development data:
 
 ```bash
 php artisan db:seed
 ```
 
-> لا تستخدم `migrate:fresh --seed` على قاعدة بيانات تحتوي بيانات مهمة؛ فهذا الأمر يحذف الجداول ويعيد إنشاءها.
+> Do not run `migrate:fresh --seed` against a database containing important data. It drops all tables before recreating them.
 
-### 5. ربط التخزين وبناء ملفات الواجهة
+### 5. Link Storage and Build Frontend Assets
 
 ```bash
 php artisan storage:link
 npm run build
 ```
 
-### 6. تشغيل التطبيق
+### 6. Run the Application
 
-للتشغيل السريع:
+Start the HTTP server:
 
 ```bash
 php artisan serve
 ```
 
-ثم افتح `http://127.0.0.1:8000`.
+Open `http://127.0.0.1:8000` in your browser.
 
-أثناء التطوير يمكن تشغيل الخادم، وطابور المهام، وسجل Laravel، وVite معًا:
+During development, you can run the application server, queue listener, log viewer, and Vite together:
 
 ```bash
 composer run dev
 ```
 
-## إعداد الخدمات الخارجية
+## External Services Configuration
 
-ضع المفاتيح في `.env` فقط، ولا ترفعها إلى GitHub:
+Keep all credentials in `.env` and never commit them to GitHub.
 
 ### Stripe
 
@@ -213,13 +262,13 @@ STRIPE_WEBHOOK_SECRET=
 STRIPE_CURRENCY=usd
 ```
 
-وجّه Webhook الخاص بـ Stripe إلى:
+Configure your Stripe webhook to point to:
 
 ```text
 POST /api/stripe/webhook
 ```
 
-### Google وFacebook OAuth
+### Google and Facebook OAuth
 
 ```dotenv
 GOOGLE_CLIENT_ID=
@@ -230,9 +279,9 @@ FACEBOOK_CLIENT_SECRET=
 FACEBOOK_REDIRECT_URI=
 ```
 
-### Firebase وPusher
+### Firebase and Pusher
 
-يحتاج Firebase إلى بيانات اعتماد حساب الخدمة المشار إليها في إعدادات Firebase، بينما يحتاج Pusher إلى مفاتيح التطبيق والـ cluster:
+Firebase requires a service-account configuration referenced by the Firebase settings. Pusher requires application credentials and a cluster:
 
 ```dotenv
 PUSHER_APP_ID=
@@ -241,117 +290,121 @@ PUSHER_APP_SECRET=
 PUSHER_APP_CLUSTER=
 ```
 
-راجع ملفات الإعداد داخل `config/` لمعرفة أسماء المتغيرات الإضافية الخاصة بالبريد وPayerURL والتخزين السحابي.
+Review the files in `config/` for additional variables related to email, PayerURL, Firebase, broadcasting, and cloud storage.
 
-## الأوامر المهمة
+## Useful Commands
 
-| الأمر | الاستخدام |
+| Command | Description |
 | --- | --- |
-| `composer run setup` | تثبيت الاعتماديات، إنشاء البيئة، الترحيلات، وبناء الواجهة |
-| `composer run dev` | تشغيل بيئة التطوير المتكاملة |
-| `php artisan migrate` | تطبيق ترحيلات قاعدة البيانات |
-| `php artisan db:seed` | إدخال البيانات التجريبية |
-| `php artisan route:list` | عرض جميع مسارات التطبيق |
-| `php artisan config:clear` | مسح الإعدادات المخزنة مؤقتًا |
-| `npm run dev` | تشغيل Vite بوضع المراقبة |
-| `npm run build` | بناء أصول الواجهة للإنتاج |
-| `composer test` | تشغيل اختبارات PHPUnit عبر Laravel |
+| `composer run setup` | Install dependencies, create the environment, run migrations, and build frontend assets |
+| `composer run dev` | Run the complete local development environment |
+| `php artisan migrate` | Apply database migrations |
+| `php artisan db:seed` | Load development seed data |
+| `php artisan route:list` | Display all registered application routes |
+| `php artisan config:clear` | Clear cached configuration |
+| `npm run dev` | Run Vite in development/watch mode |
+| `npm run build` | Build frontend assets for production |
+| `composer test` | Run the PHPUnit test suite through Laravel |
 
-## واجهة الـ API
+## API Overview
 
-توجد مسارات الـ API في [`routes/api.php`](routes/api.php)، ويضيف Laravel البادئة `/api` تلقائيًا. أمثلة على مجموعات المسارات:
+API routes are defined in [`routes/api.php`](routes/api.php). Laravel automatically applies the `/api` prefix.
 
-| المجموعة | أمثلة |
+| Group | Example Endpoints |
 | --- | --- |
-| المصادقة | `/api/auth/register`، `/api/auth/login`، `/api/auth/verify-otp` |
-| المستفيد | `/api/beneficiary/profile`، `/api/beneficiary/aid-applications` |
-| المتبرع | `/api/donor/campaigns`، `/api/donor/donations` |
-| الكفالات | `/api/sponsorships`، `/api/sponsorships/{id}/payments` |
-| الإشعارات | `/api/notifications` |
-| المحادثات | `/api/chat/conversations` |
-| التقارير | `/api/reports/general`، `/api/reports/donations` |
-| الإدارة | إدارة الحملات والمستفيدين والمتطوعين والمهام والتبرعات |
+| Authentication | `/api/auth/register`, `/api/auth/login`, `/api/auth/verify-otp` |
+| Beneficiaries | `/api/beneficiary/profile`, `/api/beneficiary/aid-applications` |
+| Donors | `/api/donor/campaigns`, `/api/donor/donations` |
+| Sponsorships | `/api/sponsorships`, `/api/sponsorships/{id}/payments` |
+| Notifications | `/api/notifications` |
+| Conversations | `/api/chat/conversations` |
+| Reports | `/api/reports/general`, `/api/reports/donations` |
+| Administration | Campaign, beneficiary, volunteer, task, and donation management endpoints |
 
-المسارات المحمية تستخدم Laravel Sanctum. بعد تسجيل الدخول أرسل التوكن في الطلبات اللاحقة:
+Protected endpoints use Laravel Sanctum. Include the token returned after login in subsequent requests:
 
 ```http
 Authorization: Bearer <token>
 Accept: application/json
 ```
 
-للحصول على قائمة دقيقة بالمسارات والـ middleware والـ HTTP methods:
+To view the complete list of endpoints, HTTP methods, and middleware:
 
 ```bash
 php artisan route:list --path=api
 ```
 
-## هيكل المشروع
+## Project Structure
 
 ```text
 app/
-├── Http/Controllers/   # منطق استقبال طلبات الويب والـ API
-├── Http/Requests/       # التحقق من المدخلات
-├── Models/              # نماذج Eloquent والعلاقات
-├── Services/            # تكاملات وخدمات الأعمال
-├── Events/              # أحداث البث والتواصل الفوري
-└── Exports/             # تصدير البيانات
+├── Http/Controllers/   # Web and API request handling
+├── Http/Requests/      # Request validation
+├── Models/             # Eloquent models and relationships
+├── Services/           # Business services and integrations
+├── Events/             # Broadcast and real-time events
+└── Exports/            # Data export classes
 database/
-├── migrations/          # مخطط قاعدة البيانات
-├── factories/           # مصانع الاختبارات
-└── seeders/             # بيانات التشغيل التجريبية
+├── migrations/         # Database schema migrations
+├── factories/          # Test and development factories
+└── seeders/            # Development seed data
 routes/
-├── api.php              # واجهة REST API
-├── web.php              # صفحات الويب ونتائج الدفع
-└── console.php          # أوامر Artisan
+├── api.php             # REST API routes
+├── web.php             # Web and payment result routes
+└── console.php         # Artisan command routes
 resources/
-├── views/               # قوالب Blade وصفحات الدفع والإيصالات
-├── css/                 # أنماط Tailwind
-└── js/                  # نقطة دخول Vite وAxios
-config/                  # إعدادات Laravel والتكاملات الخارجية
-tests/                   # اختبارات Unit وFeature
+├── views/              # Blade templates, payment pages, and receipts
+├── css/                # Tailwind styles
+└── js/                 # Vite and Axios entry points
+config/                 # Laravel and integration configuration
+tests/                  # Unit and feature tests
 ```
 
-## الاختبارات
+## Testing
 
-يستخدم المشروع PHPUnit، ويجهز `phpunit.xml` قاعدة SQLite داخل الذاكرة للاختبارات:
+The project uses PHPUnit. The `phpunit.xml` configuration uses an in-memory SQLite database for tests:
 
 ```bash
 php artisan test
 ```
 
-أو:
+Or:
 
 ```bash
 composer test
 ```
 
-قبل فتح Pull Request، شغّل الاختبارات وبناء الواجهة وتحقق من أن الترحيلات تعمل على نسخة نظيفة من قاعدة البيانات.
+Before opening a pull request, run the tests and frontend build, and verify that the migrations work on a clean database:
 
-## الأمان
+```bash
+php artisan test
+npm run build
+```
 
-- لا ترفع `.env` أو مفاتيح Stripe أو Firebase أو OAuth أو SMTP إلى المستودع.
-- استخدم أسرارًا جديدة في بيئة الإنتاج إذا سبق مشاركة أي مفاتيح خارج مدير أسرار آمن.
-- اضبط `APP_DEBUG=false` في الإنتاج.
-- استخدم HTTPS، وحدّث `APP_URL` و`FRONTEND_URL` وبيانات CORS بما يناسب النشر.
-- احمِ Webhooks وتحقق من توقيعات Stripe وPayerURL قبل معالجة المدفوعات.
-- أبلغ عن الثغرات الأمنية بشكل خاص إلى مالكي المشروع بدل نشر تفاصيلها في Issue عامة.
+## Security
 
-## المساهمة
+- Never commit `.env`, Stripe, Firebase, OAuth, SMTP, or other service credentials.
+- Rotate any credentials that have been exposed outside a secure secrets manager.
+- Set `APP_DEBUG=false` in production.
+- Use HTTPS in production.
+- Configure `APP_URL`, `FRONTEND_URL`, and CORS settings for the deployment environment.
+- Protect payment webhooks and verify Stripe and PayerURL signatures before processing payments.
+- Report security vulnerabilities privately to the project maintainers instead of publishing exploitable details in a public issue.
 
-المساهمات مرحب بها:
+## Contributing
 
-1. أنشئ Fork للمشروع.
-2. أنشئ فرعًا واضح الاسم مثل `feature/recurring-donations`.
-3. نفّذ التغيير مع اختبار مناسب.
-4. شغّل `php artisan test` و`npm run build`.
-5. افتح Pull Request يوضح المشكلة والحل والتغييرات المؤثرة على الإعدادات.
+Contributions are welcome:
 
-## الترخيص
+1. Fork the repository.
+2. Create a focused branch, such as `feature/recurring-donations`.
+3. Implement the change with appropriate tests.
+4. Run `php artisan test` and `npm run build`.
+5. Open a pull request describing the problem, solution, and any configuration changes.
 
-هذا المشروع مرخص بموجب **MIT License** وفق بيانات الحزمة الحالية. أضف ملف `LICENSE` رسميًا إلى المستودع عند نشر النسخة العامة إذا لم يكن موجودًا.
+## License
 
-<div dir="rtl">
+This project is licensed under the **MIT License**, according to the current package configuration. Add an official `LICENSE` file to the repository before publishing the public release if one does not already exist.
 
-### شكرًا لمساهمتك في بناء أثر خيري أكبر
+---
 
-</div>
+Built to help create a greater charitable impact.
